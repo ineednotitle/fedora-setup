@@ -1,4 +1,4 @@
-# fedora-setup
+# Fedora-setup
 
 A modular post-install setup script for Fedora Linux (KDE edition).  
 Installs packages, configures your shell, hardens your system, and gets you productive fast.
