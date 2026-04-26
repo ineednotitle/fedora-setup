@@ -1,10 +1,17 @@
 #!/bin/bash
 
-#===========================================
-# Fedora Complete Setup Script
-# Includes: DNF, Flatpak, GitHub Repos
-# Version: 2.6
-#===========================================
+# ╔══════════════════════════════════════════════════════════════════════════╗
+#  ███████╗███████╗██████╗  ██████╗ ██████╗  █████╗ ███████╗ ██████╗ ██████╗
+#  ██╔════╝██╔════╝██╔══██╗██╔═══██╗██╔══██╗██╔══██╗██╔════╝██╔═══██╗██╔══██╗
+#  █████╗  █████╗  ██║  ██║██║   ██║██████╔╝███████║█████╗  ██║   ██║██████╔╝
+#  ██╔══╝  ██╔══╝  ██║  ██║██║   ██║██╔══██╗██╔══██║██╔══╝  ██║   ██║██╔══██╗
+#  ██║     ███████╗██████╔╝╚██████╔╝██║  ██║██║  ██║██║     ╚██████╔╝██║  ██║
+#  ╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝
+#
+#      Invisible Migration from Windows + Full Setup + Easy of Comfort
+#   Version: 0.8 --beta
+#   Modules: Fedora · Browsers Harding · Security · VPN · Privacy · More
+# ╚══════════════════════════════════════════════════════════════════════════╝
 
 # -e  : exit on first error
 # -u  : treat unset variables as errors  (catches typos)
@@ -67,6 +74,7 @@ DNF_PACKAGES=(
     wine
     steam
     playonlinux
+    lutris
 
     # Applications
     showtime
@@ -74,7 +82,6 @@ DNF_PACKAGES=(
 
     # System
     dnf-plugins-core
-    flatpak
     thunderbird
     baobab
     gnome-disks
@@ -87,29 +94,40 @@ DNF_PACKAGES=(
 # Flatpak Applications
 FLATPAK_PACKAGES=(
     # Communication
-    #"com.discordapp.Discord"
+    "com.discordapp.Discord"
+    "org.telegram.desktop"
+    "org.signal.Signal"
 
     # Productivity
-    #"md.obsidian.Obsidian"
+    "md.obsidian.Obsidian"
     "org.onlyoffice.desktopeditors"
 
     # Development
-    "com.visualstudio.code"
+    "com.vscodium.codium"
     "io.podman_desktop.PodmanDesktop"
+
+    #Creativity
+    "org.blender.Blender"
+    "org.kde.krita"
+    "org.kde.kdenlive"
+    "org.synfig.SynfigStudio"
 
     # Games
     "com.heroicgameslauncher.hgl"
     "io.github.fastrizwaan.WineZGUI"
+    
 
     # Multimedia
-    #"com.spotify.Client"
+    "com.spotify.Client"
     "org.videolan.VLC"
     "org.jdownloader.JDownloader"
     "org.mixxx.Mixxx"
+    "org.qbittorrent.qBittorrent"
 
     # Browsers
-    #"com.brave.Browser"
+    "com.brave.Browser"
     "app.zen_browser.zen"
+    "io.gitlab.librewolf-community"
 
     # Utilities
     "org.flameshot.Flameshot"
@@ -5739,8 +5757,13 @@ BANNER
 show_menu() {
     clear
     echo ""
-    echo "  Fedora Complete Setup Script v2.8"
-    echo "  =================================="
+    echo "███████╗███████╗██████╗  ██████╗ ██████╗  █████╗"
+    echo "██╔════╝██╔════╝██╔══██╗██╔═══██╗██╔══██╗██╔══██╗"
+    echo "█████╗  █████╗  ██║  ██║██║   ██║██████╔╝███████║"
+    echo "██╔══╝  ██╔══╝  ██║  ██║██║   ██║██╔══██╗██╔══██║"
+    echo "██║     ███████╗██████╔╝╚██████╔╝██║  ██║██║  ██║"
+    echo "╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝"
+    echo "===============================================
     echo ""
     echo "  1)  Install EVERYTHING"
     echo ""
