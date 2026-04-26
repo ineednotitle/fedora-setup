@@ -46,7 +46,7 @@ I hope thiis make you day... On your Fedora journey!!
 
 ## Requirements
 
-- **Fedora** — tested primarily on Fedora 39/40 KDE Spin  
+- **Fedora** — tested primarily on Fedora 42/43 KDE Spin  
 - A **regular user account** with sudo access (do not run as root)  
 - Internet connection  
 - `bash` 4.0+
@@ -57,13 +57,13 @@ I hope thiis make you day... On your Fedora journey!!
 
 ```bash
 # 1. Download the script
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/fedora-setup/main/setuplinuxv10_clean.sh
+curl -O https://raw.githubusercontent.com/YOUR_USERNAME/fedora-setup/main/setup.sh
 
 # 2. Make it executable
-chmod +x setuplinuxv10_clean.sh
+chmod +x setup.sh
 
 # 3. Run it (do NOT use sudo)
-./setuplinuxv10_clean.sh
+./setup.sh
 ```
 
 You'll be prompted for your sudo password once at startup. After that, an interactive menu lets you pick exactly what to install.
@@ -133,7 +133,7 @@ Options 14–27 make real, persistent changes to your system (firewall rules, ke
 
 ## AI Notice
 
-This script was heavily developed and refactored with the assistance of AI (Claude by Anthropic). That means:
+This script was developed and refactored with the assistance of AI (Claude by Anthropic). That means:
 
 - The logic has been reviewed but **not exhaustively tested** on all hardware and Fedora versions
 - Some edge cases may be missing
