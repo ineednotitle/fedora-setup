@@ -946,7 +946,9 @@ install_appimages() {
             local pid2=$!
             _download_affinity_installer &
             local pid3=$!
-            wait "$pid1" && wait "$pid2" && wait "$pid3" || true
+            wait "$pid1" || true
+            wait "$pid2" || true
+            wait "$pid3" || true
             ;;
         0)
             print_warning "Cancelled"
@@ -2700,41 +2702,46 @@ USERJS
 
     local found=0
 
-    # ── Firefox ───────────────────────────────────────────────────────
-    local _ff_base="$HOME/.mozilla/firefox"
-    if [[ -d "$_ff_base" ]]; then
+    # Helper: scan a base dir and harden all *.default* profile subdirs found
+    _scan_and_harden() {
+        local base="$1" label="$2" depth="${3:-1}"
+        [[ -d "$base" ]] || return 0
         while IFS= read -r profile; do
-            [[ -d "$profile" ]] && _harden_ff_profile "$profile" "Firefox" \
-                && found=$((found+1))
-        done < <(find "$_ff_base" -maxdepth 1 -name "*.default*" -type d 2>/dev/null)
-    fi
+            if [[ -d "$profile" ]]; then
+                _harden_ff_profile "$profile" "$label"
+                found=$((found+1))
+            fi
+        done < <(find "$base" -maxdepth "$depth" -name "*.default*" -type d 2>/dev/null)
+    }
+
+    # ── Firefox ───────────────────────────────────────────────────────
+    # DNF / native install
+    _scan_and_harden "$HOME/.mozilla/firefox" "Firefox"
+    # Flatpak install (org.mozilla.firefox)
+    _scan_and_harden "$HOME/.var/app/org.mozilla.firefox/.mozilla/firefox" "Firefox (Flatpak)"
 
     # ── LibreWolf ─────────────────────────────────────────────────────
-    local _lw_base="$HOME/.librewolf"
-    if [[ -d "$_lw_base" ]]; then
-        while IFS= read -r profile; do
-            [[ -d "$profile" ]] && _harden_ff_profile "$profile" "LibreWolf" \
-                && found=$((found+1))
-        done < <(find "$_lw_base" -maxdepth 1 -name "*.default*" -type d 2>/dev/null)
-    fi
+    # Native / COPR install
+    _scan_and_harden "$HOME/.librewolf" "LibreWolf"
+    # Flatpak install (io.gitlab.librewolf-community)
+    _scan_and_harden "$HOME/.var/app/io.gitlab.librewolf-community/.librewolf" "LibreWolf (Flatpak)"
 
     # ── Zen Browser ───────────────────────────────────────────────────
-    # Zen is Firefox-based; profiles live under ~/.zen/
-    # Supports both *.default* and *.default-release* layout variants.
-    local _zen_base="$HOME/.zen"
-    if [[ -d "$_zen_base" ]]; then
-        while IFS= read -r profile; do
-            [[ -d "$profile" ]] && _harden_ff_profile "$profile" "Zen Browser" \
-                && found=$((found+1))
-        done < <(find "$_zen_base" -maxdepth 2 \
-            \( -name "*.default*" -o -name "*.default-release*" \) \
-            -type d 2>/dev/null)
-    fi
+    # Native install
+    _scan_and_harden "$HOME/.zen" "Zen Browser" 2
+    # Flatpak install (app.zen_browser.zen)
+    _scan_and_harden "$HOME/.var/app/app.zen_browser.zen/.zen" "Zen Browser (Flatpak)" 2
 
     if [[ $found -eq 0 ]]; then
-        print_warning "No Firefox, LibreWolf, or Zen Browser profiles found."
+        print_warning "No browser profiles found (checked native + Flatpak locations)."
         echo -e "  ${CYAN}Launch your browser at least once to create a profile, then re-run.${NC}"
-        echo -e "  ${CYAN}Zen Browser Flatpak: flatpak install flathub app.zen_browser.zen${NC}"
+        echo -e "  ${CYAN}Checked paths:${NC}"
+        echo -e "    ~/.mozilla/firefox                              (Firefox DNF)"
+        echo -e "    ~/.var/app/org.mozilla.firefox/                 (Firefox Flatpak)"
+        echo -e "    ~/.librewolf                                    (LibreWolf native)"
+        echo -e "    ~/.var/app/io.gitlab.librewolf-community/       (LibreWolf Flatpak)"
+        echo -e "    ~/.zen                                          (Zen Browser native)"
+        echo -e "    ~/.var/app/app.zen_browser.zen/                 (Zen Browser Flatpak)"
     else
         print_success "Hardened $found profile(s) across Firefox / LibreWolf / Zen Browser."
     fi
@@ -4954,16 +4961,12 @@ _mnt_setup_udev() {
     # Rule: when a USB storage device with a filesystem is plugged in,
     # trigger udisks2 to auto-mount it (KDE Plasma handles the GUI popup).
     sudo tee /etc/udev/rules.d/99-automount.rules >/dev/null <<'UDEV'
-# Auto-mount USB and external drives via udisks2 when plugged in
+# Auto-mount USB and external drives via systemd-mount when plugged in
 # Created by setup.sh auto-mount module
 
-# USB mass storage — trigger systemd/udisks2 on filesystem appearance
+# USB mass storage — trigger systemd to auto-mount on filesystem appearance
 ACTION=="add", SUBSYSTEMS=="usb", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", \
-    RUN+="/bin/systemd-mount --no-block --collect --automount=yes %N"
-
-# Ensure KDE/Dolphin is notified (handled by udisks2 already, but belt-and-suspenders)
-ACTION=="add", SUBSYSTEM=="block", ENV{ID_FS_USAGE}=="filesystem", \
-    RUN+="/usr/bin/udisksctl mount --block-device %N --no-user-interaction"
+    RUN+="/usr/bin/systemd-mount --no-block --collect --automount=yes %N"
 UDEV
 
     sudo udevadm control --reload-rules 2>/dev/null && _mnt_ok "udev rules reloaded." \
@@ -5000,10 +5003,22 @@ _mnt_reload_systemd() {
         # Check the device for this UUID actually exists on the system
         if ! blkid -U "$_uuid" &>/dev/null 2>&1; then
             _mnt_err "UUID=${_uuid:0:8}… not found on this system — reverting that entry."
-            # Remove just this specific UUID entry and its header comment
-            sudo sed -i "/^# Added by setup.sh auto-mount/{ N; /UUID=${_uuid}/d }" \
-                /etc/fstab 2>/dev/null || true
-            sudo sed -i "/UUID=${_uuid}/d" /etc/fstab 2>/dev/null || true
+            # Remove the full 3-line block (blank + 2 comment lines + UUID line)
+            # using Python to avoid sed multi-line limitations
+            sudo python3 - /etc/fstab "$_uuid" <<'PYREVERT'
+import sys, re
+fstab_path, uuid = sys.argv[1], sys.argv[2]
+with open(fstab_path) as f:
+    content = f.read()
+# Remove the full block: blank line + comment header + device comment + UUID entry
+cleaned = re.sub(
+    r'\n# Added by setup\.sh auto-mount[^\n]*\n# Device:[^\n]*\nUUID=' + re.escape(uuid) + r'[^\n]*',
+    '',
+    content
+)
+with open(fstab_path, 'w') as f:
+    f.write(cleaned)
+PYREVERT
             _bad_uuids=$(( _bad_uuids + 1 ))
         else
             _mnt_ok "UUID=${_uuid:0:8}… verified on this system."
@@ -5191,7 +5206,7 @@ PYCLEAN
     done < <(_mnt_scan_devices)
 
     print_section "Step 4/5 — USB plug-and-play setup..."
-    if $do_udev || [[ "$_mnt_choice" == "3" ]]; then
+    if $do_udev; then
         _mnt_setup_polkit
         _mnt_setup_udev
         _mnt_info "Enabling udisks2 service..."
