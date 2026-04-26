@@ -57,7 +57,7 @@ I hope thiis make you day... On your Fedora journey!!
 
 ```bash
 # 1. Download the script
-curl -O https://raw.githubusercontent.com/YOUR_USERNAME/fedora-setup/main/setup.sh
+curl -O https://raw.githubusercontent.com/inneednotitle/fedora-setup/main/setup.sh
 
 # 2. Make it executable
 chmod +x setup.sh
