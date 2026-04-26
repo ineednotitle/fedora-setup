@@ -2,6 +2,9 @@
 
 A modular post-install setup script for Fedora Linux (KDE edition).  
 Installs packages, configures your shell, hardens your system, and gets you productive fast.
+I have made this script to make the experence of the Fedora Linux More polished and beginner friendly. 
+This includes Everything that I thougth for need in the fedora and Why? people use ubuntu
+I hope thiis make you day... On your Fedora journey!!
 
 > ⚠️ **AI-assisted & Beta** — This script was heavily built and refactored with AI assistance. It works on the author's machine but has **not been tested across every Fedora version or hardware configuration**. Use it carefully, read what each option does before running it, and always have a backup. Expect rough edges. PRs and issue reports are welcome.
 
