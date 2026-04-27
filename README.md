@@ -17,7 +17,7 @@ I hope thiis make you day... On your Fedora journey!!
 | 1 | **Install EVERYTHING** | Runs all steps below in sequence |
 | 2 | Setup Repositories | Adds RPM Fusion (free + nonfree) and Flathub |
 | 3 | Install DNF Packages | git, make, cmake, python3, nodejs, tmux, fzf, wine, steam, fonts, and more |
-| 4 | Install Flatpak Apps | VS Code, VLC, OnlyOffice, Heroic, WineZGUI, Flameshot, Zen Browser, and more |
+| 4 | Install Flatpak Apps | VSCodium, VLC, OnlyOffice, Heroic, WineZGUI, Flameshot, Zen & Brave Browser, and more |
 | 5 | Clone GitHub Repos | Clones and builds repos defined in the `GITHUB_REPOS` list |
 | 6 | Install GitHub Releases | Downloads latest binaries: lazygit, fzf, bat, ripgrep |
 | 7 | Install Oh My Posh | Prompt theme engine for bash/zsh with theme download |
