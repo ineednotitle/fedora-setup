@@ -1,158 +1,303 @@
-# Fedora-setup
+<div align="center">
 
-A modular post-install setup script for Fedora Linux (KDE edition).  
-Installs packages, configures your shell, hardens your system, and gets you productive fast.
-I have made this script to make the experence of the Fedora Linux More polished and beginner friendly. 
-This includes Everything that I thougth for need in the fedora and Why? people use ubuntu
-I hope thiis make you day... On your Fedora journey!!
+# Fedora Setup Script
 
-> ⚠️ **AI-assisted & Beta** — This script was heavily built and refactored with AI assistance. It works on the author's machine but has **not been tested across every Fedora version or hardware configuration**. Use it carefully, read what each option does before running it, and always have a backup. Expect rough edges. PRs and issue reports are welcome.
+**A one-stop interactive setup script for Fedora Linux** — packages, security hardening, dev tools, privacy, Hyprland and more, all from a single terminal menu.
 
----
+![Fedora](https://img.shields.io/badge/Fedora-41%2B-blue?logo=fedora&logoColor=white)
+![Shell](https://img.shields.io/badge/Shell-Bash-green?logo=gnubash&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-yellow)
+![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen)
 
-## Features
-
-| # | Option | What it does |
-|---|--------|-------------|
-| 1 | **Install EVERYTHING** | Runs all steps below in sequence |
-| 2 | Setup Repositories | Adds RPM Fusion (free + nonfree) and Flathub |
-| 3 | Install DNF Packages | git, make, cmake, python3, nodejs, tmux, fzf, wine, steam, fonts, and more |
-| 4 | Install Flatpak Apps | VSCodium, VLC, OnlyOffice, Heroic, WineZGUI, Flameshot, Zen & Brave Browser, and more |
-| 5 | Clone GitHub Repos | Clones and builds repos defined in the `GITHUB_REPOS` list |
-| 6 | Install GitHub Releases | Downloads latest binaries: lazygit, fzf, bat, ripgrep |
-| 7 | Install Oh My Posh | Prompt theme engine for bash/zsh with theme download |
-| 8 | Configure Fastfetch | Sets up a custom fastfetch config with logo support |
-| 9 | Install Nerd Fonts | JetBrainsMono and FiraCode Nerd Fonts (parallel download) |
-| 10 | Install Rust | Official rustup installer |
-| 11 | Install NVM | Node Version Manager v0.40.1 |
-| 12 | Install NVIDIA Drivers | akmod-nvidia / akmod-nvidia-open / CUDA — your choice |
-| 13 | Install AppImages | Helium Browser, Capacities, Linux Affinity Installer |
-| 14 | ClamAV Antivirus | Installs, configures clamd, schedules scans, desktop alerts |
-| 15 | Linux Security Hardening | firewalld, fail2ban, SELinux enforcing, sysctl kernel hardening |
-| 16 | JShielder Hardening | Full 14-step system hardening: SSH, AIDE, auditd, GRUB, USBGuard, and more |
-| 17 | Privacy & Network Tools | Tor, MAC spoofing, WireGuard, Yggdrasil, DNS-over-TLS, I2P, proxychains, MAT2 |
-| 18 | Auto Mount All Drives | fstab entries for internal, external, NTFS, exFAT, and USB auto-mount |
-| 19 | Noobs Guide | Interactive Fedora learning guide: terminal, packages, KDE, troubleshooting |
-| 20 | Backup Configs | Backs up dotfiles, SSH config, fastfetch, oh-my-posh themes |
-| 21 | Restore Configs | Restores from a previous backup directory |
-| 22 | GRUB Hardening | Kernel lockdown mode, CPU mitigations, optional GRUB password |
-| 23 | Lynis Audit | Full security audit with scoring via Lynis |
-| 24 | Disk Encryption | Checks LUKS status and sets up encrypted swap |
-| 25 | Systemd Hardening | Systemd sandboxing, immutable files, logwatch |
-| 26 | Browser Privacy | Hardens Firefox/LibreWolf via user.js (no WebRTC, anti-fingerprint, DoH) |
-| 27 | Hacking Tools | 15-category Kali Linux toolkit installable on Fedora via DNF |
+</div>
 
 ---
 
-## Requirements
+## Features at a Glance
 
-- **Fedora** — tested primarily on Fedora 42/43 KDE Spin  
-- A **regular user account** with sudo access (do not run as root)  
-- Internet connection  
-- `bash` 4.0+
+| Category | What's included |
+|---|---|
+| Package Installation | RPM Fusion, Flathub / Terra repos, DNF and Flatpak batch installs, GitHub clone and release installs |
+| Shell and Terminal | Oh My Posh, Fastfetch, Nerd Fonts |
+| Development Tools | Rust, NVM, Homebrew (Linuxbrew), Winboat |
+| Drivers and Apps | NVIDIA drivers, AppImages (Helium, Capacities, Affinity) |
+| Security | ClamAV, Chris Titus Linux Hardening, JShielder full system hardening |
+| Privacy and Network | Tor, MAC address spoofing, WireGuard VPN, DNS-over-TLS |
+| Storage | Auto-mount all drives |
+| Help and Learning | Interactive NOOBS GUIDE to Fedora |
+| Extra Security | GRUB lockdown, Lynis audit, disk encryption, systemd hardening |
+| Privacy Extras | Browser hardening (Firefox / LibreWolf / Zen) |
+| Hacking Tools | Kali Linux Toolkit on Fedora |
+| Hyprland | Full Hyprland install + dotfiles (3 presets to choose from) |
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Download the script
-curl -O https://raw.githubusercontent.com/inneednotitle/fedora-setup/main/setup.sh
-
-# 2. Make it executable
+git clone https://github.com/ineednotitle/fedora-setup.git
+cd fedora-setup
 chmod +x setup.sh
-
-# 3. Run it (do NOT use sudo)
 ./setup.sh
 ```
 
-You'll be prompted for your sudo password once at startup. After that, an interactive menu lets you pick exactly what to install.
+> **Do NOT run as root.** The script calls `sudo` internally when needed.
 
 ---
 
-## Recommended First-Run Order
+## Requirements
 
-If you're setting up a fresh Fedora install, this order works well:
-
-1. **Option 2** — Setup Repositories first (required for most installs)
-2. **Option 3** — DNF packages
-3. **Option 4** — Flatpak apps
-4. **Option 9** — Nerd Fonts (needed for Oh My Posh to render correctly)
-5. **Option 7** — Oh My Posh
-6. **Option 8** — Fastfetch
-7. **Option 10 / 11** — Rust / NVM if you develop
-8. **Option 14–16** — Security hardening (read each step before confirming)
-9. **Option 18** — Mount your drives
-10. **Option 19** — Noobs Guide if you're new to Linux
+- Fedora **41 or newer** (tested on KDE Spin)
+- Active internet connection
+- `git` and `curl` installed: `sudo dnf install -y git curl`
+- A non-root user account with sudo privileges
 
 ---
 
-## Customisation
+## Menu Overview
 
-All package lists live near the top of the script and are easy to edit:
+```
+  1)  Install EVERYTHING
 
-```bash
-# DNF packages to install
-DNF_PACKAGES=(
-    git make cmake python3 nodejs
-    # add or remove packages here
-)
+  -- Package Installation --
+  2)  Setup Repositories (RPM Fusion, Flathub, Terra)
+  3)  Install DNF Packages
+  4)  Install Flatpak Applications
+  5)  Clone & Build GitHub Repos
+  6)  Install GitHub Releases
 
-# Flatpak app IDs
-FLATPAK_PACKAGES=(
-    "com.visualstudio.code"
-    # add or remove app IDs here
-)
+  -- Shell & Terminal --
+  7)  Install Oh My Posh
+  8)  Configure Fastfetch
+  9)  Install Nerd Fonts
 
-# GitHub repos to clone/build
-# Format: "url|branch|install_type|install_command"
-GITHUB_REPOS=(
-    "https://github.com/dreamsofautonomy/zensh.git|main|clone|"
-)
+  -- Development Tools --
+  10) Install Rust
+  11) Install NVM (Node Version Manager)
+  12) Install & Setup Homebrew (Linuxbrew)
+  13) Install Winboat
+
+  -- Drivers & Apps --
+  14) Install NVIDIA Drivers
+  15) Install AppImages (Helium, Capacities, Affinity Installer)
+
+  -- Security --
+  16) Install & Configure ClamAV Antivirus
+  17) Linux Security Hardening (Chris Titus)
+  18) JShielder -- Full System Hardening (KDE Edition)
+
+  -- Privacy & Network --
+  19) Privacy & Network Tools (Tor, MAC spoof, WireGuard, DNS-DoT)
+
+  -- Storage --
+  20) Auto Mount All Drives
+
+  -- Help & Learning --
+  21) NOOBS GUIDE -- Learn Fedora Linux
+
+  -- Extra Security: Use at your own Risk --
+  22) GRUB Hardening + Kernel Lockdown
+  23) Lynis -- Full Security Audit & Score
+  24) Disk Encryption Check + Encrypted Swap
+  25) Systemd Hardening + Immutable Files + Logwatch
+
+  -- Privacy Extras --
+  26) Harden Browser Privacy (Firefox / LibreWolf / Zen Browser)
+
+  -- Hacking Tools --
+  27) Hacking Tools -- Kali Linux Toolkit
+
+  -- Hyprland --
+  28) Install Hyprland + Dotfiles (JaKooLit / ML4W / end-4)
+
+  0)  Exit
 ```
 
 ---
 
-## Logs
+## Feature Details
 
-Every run writes a timestamped log to your home directory:
+### 1 - Install Everything
 
-```
-~/setup_log_YYYYMMDD_HHMMSS.txt
-```
-
-If something fails, check there first.
+Runs every feature in sequence (except Hyprland, which requires an interactive wizard session). Great for setting up a fresh Fedora install in one go.
 
 ---
 
-## Security & Hacking Tools Notice
+### 2 - Setup Repositories
 
-Options 14–27 make real, persistent changes to your system (firewall rules, kernel parameters, SELinux mode, GRUB config). **Read the prompt for each step before confirming.** The hacking tools category (option 27) is intended for legal use only — authorised penetration testing, CTF challenges, and security research.
+Enables the following repos before any package installs:
+
+- **RPM Fusion** (free and non-free) - codecs, drivers, extra packages
+- **Flathub** - the universal Linux app store
+- **Terra (fyralabs)** - modern packages not yet in Fedora's official repos; also required for Winboat
 
 ---
 
-## AI Notice
+### 3 to 6 - Package Installation
 
-This script was developed and refactored with the assistance of AI (Claude by Anthropic). That means:
+Batch installs your curated list of DNF packages and Flatpak apps, clones and builds GitHub repos, and downloads the latest GitHub release binaries. All lists are defined inside the script so you can customize them freely.
 
-- The logic has been reviewed but **not exhaustively tested** on all hardware and Fedora versions
-- Some edge cases may be missing
-- The script is in **beta** — use it on a machine you're comfortable experimenting on
-- If something breaks, open an issue or submit a fix — contributions are very welcome
+---
+
+### 7 - Oh My Posh
+
+Installs [Oh My Posh](https://ohmyposh.dev/) and configures a prompt theme for Bash and Zsh.
+
+### 8 - Configure Fastfetch
+
+Sets up [Fastfetch](https://github.com/fastfetch-cli/fastfetch) with a custom config to display system info on terminal launch.
+
+### 9 - Nerd Fonts
+
+Downloads and installs a selection of [Nerd Fonts](https://www.nerdfonts.com/) - required for Oh My Posh icons to render correctly.
+
+---
+
+### 10 - Rust
+
+Installs the Rust toolchain via `rustup` and configures the PATH for Cargo.
+
+### 11 - NVM (Node Version Manager)
+
+Installs [NVM](https://github.com/nvm-sh/nvm) for switching between Node.js versions. Also installs the latest LTS Node by default.
+
+### 12 - Homebrew (Linuxbrew)
+
+Installs [Homebrew](https://brew.sh/) for Linux, adds it to your shell environment (`.bashrc` and `.zshrc`), and runs `brew update` and `brew doctor` to confirm everything is healthy.
+
+### 13 - Winboat
+
+Installs [Winboat](https://terra.fyralabs.com/) from the Terra repository for running Windows applications on Linux. Falls back to ProtonUp-Qt (Flatpak) if the Terra package is unavailable for your Fedora version.
+
+---
+
+### 14 - NVIDIA Drivers
+
+Installs proprietary NVIDIA drivers from RPM Fusion with CUDA and Vulkan support.
+
+### 15 - AppImages
+
+Downloads and installs:
+
+- **Helium** - lightweight browser
+- **Capacities** - personal knowledge base
+- **Affinity Installer** - runs Affinity Suite (Photo, Designer, Publisher) via Wine/Bottles
+
+---
+
+### 16 - ClamAV
+
+Installs and configures [ClamAV](https://www.clamav.net/) antivirus with `freshclam` auto-updates and a daily scan timer.
+
+### 17 - Linux Security Hardening (Chris Titus)
+
+Runs the [Chris Titus Tech](https://github.com/ChrisTitusTech/linux-titus) hardening script - sysctl tweaks, SSH hardening, and firewall rules.
+
+### 18 - JShielder (KDE Edition)
+
+Full system hardening via [JShielder](https://github.com/Jsitech/JShielder) - PAM rules, audit daemon, kernel hardening, service disabling, and more. Tailored for KDE Plasma.
+
+---
+
+### 19 - Privacy and Network Tools
+
+Interactive submenu for:
+
+- **Tor** - anonymous browsing via the Tor network
+- **MAC address spoofing** - randomize your network identity on every boot
+- **WireGuard VPN** - fast, modern VPN setup
+- **DNS-over-TLS** - encrypted DNS via systemd-resolved
+
+### 20 - Auto Mount All Drives
+
+Detects all unmounted drives and adds them to `/etc/fstab` for automatic mounting on boot.
+
+---
+
+### 21 - NOOBS GUIDE
+
+An interactive in-script guide covering 11 topics for new Fedora users: terminal basics, package management, sudo, KDE tips, networking, troubleshooting, and recommended apps.
+
+---
+
+### 22 to 25 - Extra Security
+
+> These options make deep system changes. Always create a **Timeshift snapshot** before proceeding.
+
+| Option | Feature | What it does |
+|---|---|---|
+| 22 | GRUB Hardening | Password-protects GRUB and enables kernel lockdown mode |
+| 23 | Lynis Audit | Full [Lynis](https://cisofy.com/lynis/) security audit with hardening score |
+| 24 | Disk Encryption | Checks LUKS status and sets up an encrypted swap partition |
+| 25 | Systemd Hardening | Restricts service permissions, sets immutable flags on key files, installs Logwatch |
+
+---
+
+### 26 - Browser Privacy Hardening
+
+Applies privacy settings to your browser profile:
+
+- **Firefox** - disables telemetry, strict tracking protection, DNS-over-HTTPS
+- **LibreWolf** - verifies hardened defaults are active
+- **Zen Browser** - applies a curated user.js privacy configuration
+
+### 27 - Hacking Tools (Kali Toolkit)
+
+Installs a curated set of penetration testing tools from the Kali Linux toolset, available for Fedora via DNF and Flatpak.
+
+---
+
+### 28 - Hyprland + Dotfiles
+
+Installs [Hyprland](https://hyprland.org/) (a dynamic tiling Wayland compositor) with a choice of three community dotfile presets. Each preset shows a full description and confirmation prompt before changing anything.
+
+> Hyprland is excluded from "Install Everything" (option 1) because all three presets launch interactive wizards. Run option 28 separately after a fresh reboot.
+
+#### Option 1 - JaKooLit (Best for Fedora)
+
+> https://github.com/JaKooLit/Fedora-Hyprland
+
+- Cyberpunk / Neon Circuit Waybar aesthetic
+- Interactive whiptail wizard - choose exactly what to install
+- Built-in NVIDIA driver support
+- SDDM login manager + GTK/icon themes pre-configured
+- Quickshell overview (SUPER+A), searchable keybinds (SUPER+H)
+- Dotfiles from: https://github.com/JaKooLit/Hyprland-Dots
+
+#### Option 2 - ML4W (mylinuxforwork)
+
+> https://github.com/mylinuxforwork/dotfiles
+
+- Glass / material color theme that adapts automatically to your wallpaper
+- GUI settings app - toggle blur, borders, animations without touching config files
+- Global Glass Waybar with center workspace selector
+- Officially supports Fedora, Arch, and openSUSE Tumbleweed
+
+#### Option 3 - end-4 (illogical-impulse)
+
+> https://github.com/end-4/dots-hyprland
+
+- Most starred Hyprland dotfiles on GitHub (~14k stars)
+- GNOME-like UX - familiar for Windows and GNOME users
+- AI sidebar with ChatGPT and Gemini built into your desktop
+- Live adaptive color generation from wallpaper
+- Fancy notification center, music controls, and calendar widget
+- SUPER+/ for a full keybind cheat-sheet
+
+---
+
+## Disclaimer
+
+This script makes significant changes to your system. It is provided as-is for personal use. Always create a **Timeshift snapshot** before running any hardening or system-level options. The author takes no responsibility for data loss or system instability.
 
 ---
 
 ## Contributing
 
-1. Fork the repo
-2. Create a branch: `git checkout -b fix/your-fix-name`
-3. Make your changes and test on a real Fedora install
-4. Open a pull request with a description of what you changed and why
-
-Bug reports, feature requests, and tested PRs are all appreciated.
+Pull requests and suggestions are welcome. If you have a dotfile preset, tool, or feature you would like added, open an issue or PR.
 
 ---
 
 ## License
 
-MIT — do whatever you want with it, just don't blame me if it breaks something.
+MIT - do whatever you want with it, just don't blame me if something breaks.
