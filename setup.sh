@@ -208,139 +208,6 @@ create_directories() {
 }
 
 #===========================================
-# CONFIGURATION BACKUP/RESTORE
-#===========================================
-
-backup_configs() {
-    print_header "Backup Configurations"
-    if ! confirm_action "Do you want to backup your dotfiles and configurations?"; then
-        print_warning "Configuration backup skipped."
-        return
-    fi
-
-    mkdir -p "$JSHIELDER_BACKUP_DIR"
-    local config_files=(
-        "$HOME/.bashrc"
-        "$HOME/.zshrc"
-        "$HOME/.config/fastfetch/config.jsonc"
-        "$HOME/.config/oh-my-posh/themes"
-        "/etc/ssh/sshd_config"
-        "/etc/sysctl.d/99-jshielder.conf"
-    )
-
-    local backed_up_count=0
-    for file in "${config_files[@]}"; do
-        if [[ -e "$file" ]]; then
-            if [[ "$file" == /etc/* ]]; then
-                if sudo cp -r "$file" "$JSHIELDER_BACKUP_DIR/" 2>/dev/null; then
-                    print_success "Backed up: $file"
-                    backed_up_count=$((backed_up_count + 1))
-                else
-                    print_warning "Permission denied backing up: $file (skipping)"
-                fi
-            else
-                if cp -r "$file" "$JSHIELDER_BACKUP_DIR/" 2>/dev/null; then
-                    print_success "Backed up: $file"
-                    backed_up_count=$((backed_up_count + 1))
-                else
-                    print_warning "Could not back up: $file (skipping)"
-                fi
-            fi
-        else
-            print_warning "Skipping non-existent file: $file"
-        fi
-    done
-
-    if [[ $backed_up_count -gt 0 ]]; then
-        print_success "All specified configurations backed up to $JSHIELDER_BACKUP_DIR"
-    else
-        print_warning "No configurations were backed up."
-    fi
-}
-
-restore_configs() {
-    print_header "Restore Configurations"
-    if ! confirm_action "Do you want to restore configurations from a backup?"; then
-        print_warning "Configuration restore skipped."
-        return 0
-    fi
-
-    local backup_dirs=()
-    while IFS= read -r d; do
-        backup_dirs+=("$d")
-    done < <(find "$HOME" -maxdepth 1 -type d -name "jshielder_backups_*" | sort -r)
-
-    if [[ ${#backup_dirs[@]} -eq 0 ]]; then
-        print_error "No backup directories found in $HOME"
-        print_warning "Run option 20 (Backup Configs) first to create a backup."
-        return 0
-    fi
-
-    echo -e "  ${CYAN}Available backups:${NC}"
-    local i=1
-    for dir in "${backup_dirs[@]}"; do
-        echo -e "    ${WHITE}$i)${NC} $(basename "$dir")"
-        i=$(( i + 1 ))
-    done
-    echo ""
-
-    local selection
-    read -rp "  Select a backup to restore from [1-${#backup_dirs[@]}]: " selection
-    if ! [[ "$selection" =~ ^[0-9]+$ ]] || (( selection < 1 || selection > ${#backup_dirs[@]} )); then
-        print_error "Invalid selection."
-        return 0
-    fi
-
-    local selected_backup_dir="${backup_dirs[$((selection - 1))]}"
-    print_section "Restoring from $(basename "$selected_backup_dir")..."
-
-    local restored_count=0 filename target_path
-    local file
-    for file in "$selected_backup_dir"/*; do
-        [[ -e "$file" ]] || continue
-        filename=$(basename "$file")
-
-        case "$filename" in
-            sshd_config)     target_path="/etc/ssh/sshd_config" ;;
-            99-jshielder.conf) target_path="/etc/sysctl.d/99-jshielder.conf" ;;
-            themes)          target_path="$HOME/.config/oh-my-posh/themes" ;;
-            .bashrc)         target_path="$HOME/.bashrc" ;;
-            .zshrc)          target_path="$HOME/.zshrc" ;;
-            config.jsonc)    target_path="$HOME/.config/fastfetch/config.jsonc" ;;
-            *)               target_path="$HOME/$filename" ;;
-        esac
-
-        local target_dir
-        target_dir=$(dirname "$target_path")
-        if [[ "$target_path" == /etc/* ]]; then
-            sudo mkdir -p "$target_dir" 2>/dev/null || true
-            if sudo cp -r "$file" "$target_path" 2>/dev/null; then
-                print_success "Restored: $target_path"
-                restored_count=$(( restored_count + 1 ))
-            else
-                print_error "Failed to restore: $target_path (permission denied?)"
-            fi
-        else
-            mkdir -p "$target_dir" 2>/dev/null || true
-            if cp -r "$file" "$target_path" 2>/dev/null; then
-                print_success "Restored: $target_path"
-                restored_count=$(( restored_count + 1 ))
-            else
-                print_error "Failed to restore: $target_path"
-            fi
-        fi
-    done
-
-    echo ""
-    if [[ $restored_count -gt 0 ]]; then
-        print_success "$restored_count file(s) restored from $(basename "$selected_backup_dir")."
-        print_warning "Services like SSH may need restarting: sudo systemctl restart sshd"
-    else
-        print_warning "No configurations were restored."
-    fi
-}
-
-#===========================================
 # INSTALLATION FUNCTIONS
 #===========================================
 
@@ -368,6 +235,30 @@ setup_repositories() {
     print_section "Setting up Flathub"
     flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
     print_success "Flathub configured"
+
+    print_section "Adding Terra repository (fyralabs)"
+    if dnf repolist | grep -q "terra"; then
+        print_warning "Terra repo already configured"
+    else
+        sudo dnf install -y \
+            "https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo" 2>/dev/null || \
+        sudo dnf config-manager --add-repo \
+            "https://terra.fyralabs.com/terra.repo" 2>/dev/null || true
+        # Fallback: write the repo file directly
+        if ! dnf repolist 2>/dev/null | grep -q "terra"; then
+            sudo tee /etc/yum.repos.d/terra.repo > /dev/null << 'TERRA_REPO'
+[terra]
+name=Terra - $basearch
+baseurl=https://repos.fyralabs.com/terra$releasever/$basearch/
+type=rpm
+skip_if_unavailable=True
+gpgcheck=1
+gpgkey=https://terra.fyralabs.com/public.gpg
+enabled=1
+TERRA_REPO
+        fi
+        print_success "Terra repository added"
+    fi
 }
 
 install_dnf_packages() {
@@ -701,7 +592,7 @@ configure_fastfetch() {
 {
     "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
     "logo": {
-        "source": "${HOME}/.config/fastfetch/rr.png",
+        "source": "${HOME}/.config/fastfetch/photo.png",
         "type": "kitty",
         "height": 20,
         "padding":{
@@ -5751,6 +5642,264 @@ BANNER
 }
 
 #===========================================
+# HOMEBREW
+#===========================================
+
+install_homebrew() {
+    print_header "Install & Setup Homebrew (Linuxbrew)"
+
+    if check_command brew; then
+        print_warning "Homebrew is already installed: $(brew --version | head -1)"
+        if ! confirm_action "Re-run Homebrew setup/update anyway?"; then
+            return
+        fi
+    else
+        print_section "Installing Homebrew dependencies"
+        sudo dnf install -y curl git gcc gcc-c++ make 2>&1 | tee -a "$LOG_FILE"
+
+        print_section "Running Homebrew installer"
+        # The official non-interactive install
+        NONINTERACTIVE=1 /bin/bash -c \
+            "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
+            2>&1 | tee -a "$LOG_FILE"
+    fi
+
+    # Detect install path (Intel vs ARM / Linuxbrew default)
+    local brew_bin=""
+    if [[ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]]; then
+        brew_bin="/home/linuxbrew/.linuxbrew/bin/brew"
+    elif [[ -x "$HOME/.linuxbrew/bin/brew" ]]; then
+        brew_bin="$HOME/.linuxbrew/bin/brew"
+    fi
+
+    if [[ -z "$brew_bin" ]]; then
+        print_error "Homebrew binary not found after install — check $LOG_FILE"
+        return 1
+    fi
+
+    print_section "Configuring shell environment"
+    local brew_shellenv
+    brew_shellenv=$("$brew_bin" shellenv)
+
+    for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+        if [[ -f "$rc_file" ]] && ! grep -q "brew shellenv" "$rc_file"; then
+            {
+                echo ""
+                echo "# Homebrew"
+                echo "eval \"\$($brew_bin shellenv)\""
+            } >> "$rc_file"
+            print_success "Homebrew env added to $rc_file"
+        fi
+    done
+
+    # Activate in current session
+    eval "$brew_shellenv"
+
+    print_section "Running brew update & doctor"
+    brew update 2>&1 | tee -a "$LOG_FILE"
+    brew doctor 2>&1 | tee -a "$LOG_FILE" || true   # doctor exits non-zero on warnings
+
+    print_success "Homebrew installed and configured!"
+    print_warning "Restart your terminal (or run: eval \"\$(brew shellenv)\") to activate brew."
+    log "Homebrew setup complete"
+}
+
+#===========================================
+# WINBOAT
+#===========================================
+
+install_winboat() {
+    print_header "Install Winboat"
+
+    # Winboat is distributed via the Terra (fyralabs) repository.
+    # Make sure Terra is available before trying to install.
+    if ! dnf repolist 2>/dev/null | grep -q "terra"; then
+        print_warning "Terra repository not found — adding it now (required for Winboat)."
+        setup_repositories
+    fi
+
+    if rpm -q winboat &>/dev/null; then
+        print_warning "Winboat is already installed."
+        if ! confirm_action "Reinstall / upgrade Winboat?"; then
+            return
+        fi
+    fi
+
+    print_section "Installing Winboat via DNF (Terra repo)"
+    if sudo dnf install -y winboat 2>&1 | tee -a "$LOG_FILE"; then
+        print_success "Winboat installed successfully!"
+        log "Winboat installed"
+    else
+        print_error "DNF install failed — trying Flatpak fallback..."
+        # Flatpak fallback in case the Terra package is unavailable for this Fedora version
+        if flatpak install -y flathub net.davidotek.pupgui2 2>&1 | tee -a "$LOG_FILE"; then
+            print_success "ProtonUp-Qt (Flatpak) installed as Winboat alternative."
+            log "ProtonUp-Qt installed as Winboat fallback"
+        else
+            print_error "Both install methods failed — check $LOG_FILE"
+            log "Winboat install failed"
+            return 1
+        fi
+    fi
+}
+
+#===========================================
+# HYPRLAND + DOTFILES
+#===========================================
+
+install_hyprland() {
+    print_header "Hyprland Install + Dotfiles"
+
+    echo ""
+    echo -e "${YELLOW}  ⚠  WARNING: Hyprland replaces your current desktop session.${NC}"
+    echo -e "${YELLOW}     Back up your system with Timeshift before proceeding!${NC}"
+    echo ""
+    echo -e "${CYAN}  Choose a Hyprland dotfile preset:${NC}"
+    echo ""
+    echo -e "  ${WHITE}1) JaKooLit${NC}  — Cyberpunk/Neon aesthetic. Fedora-native installer,"
+    echo    "             full whiptail wizard, NVIDIA support, Waybar + Rofi + SDDM."
+    echo    "             ★ Best pick for Fedora. Actively maintained."
+    echo    "             https://github.com/JaKooLit/Fedora-Hyprland"
+    echo ""
+    echo -e "  ${WHITE}2) ML4W${NC}      — Professional glass/material theme. Adaptive colors"
+    echo    "             based on your wallpaper. GUI settings app included."
+    echo    "             Officially supports Fedora + Arch + openSUSE."
+    echo    "             https://github.com/mylinuxforwork/dotfiles"
+    echo ""
+    echo -e "  ${WHITE}3) end-4${NC}     — Most starred on GitHub (~14k ⭐). GNOME-like UX,"
+    echo    "             AI sidebar (ChatGPT/Gemini), live color generation,"
+    echo    "             fancy notifications and music controls."
+    echo    "             https://github.com/end-4/dots-hyprland"
+    echo ""
+    echo -e "  ${WHITE}0) Cancel${NC}"
+    echo ""
+    read -rp "  Select a preset [0-3]: " _hypr_choice
+
+    case "$_hypr_choice" in
+        1) _hyprland_jakoolit ;;
+        2) _hyprland_ml4w ;;
+        3) _hyprland_end4 ;;
+        0) print_warning "Hyprland install cancelled."; return ;;
+        *) print_error "Invalid choice."; return 1 ;;
+    esac
+}
+
+# ── Preset 1: JaKooLit ─────────────────────────────────────────────────────
+_hyprland_jakoolit() {
+    print_section "JaKooLit — Fedora Hyprland Installer"
+
+    echo ""
+    echo -e "${CYAN}  About JaKooLit:${NC}"
+    echo "  • Cyberpunk / Neon Circuit Waybar aesthetic"
+    echo "  • Interactive whiptail wizard — choose exactly what to install"
+    echo "  • Built-in NVIDIA driver support"
+    echo "  • SDDM login manager + GTK/icon themes"
+    echo "  • Quickshell overview (SUPER+A), searchable keybinds (SUPER+H)"
+    echo "  • Pulls dotfiles from: https://github.com/JaKooLit/Hyprland-Dots"
+    echo ""
+    echo -e "${YELLOW}  Requirements:${NC}"
+    echo "  • Run a full 'sudo dnf update' and reboot BEFORE this installer"
+    echo "  • Do NOT run as root"
+    echo "  • NVIDIA users: uninstall nouveau first if using proprietary drivers"
+    echo ""
+
+    if ! confirm_action "Clone and launch JaKooLit Fedora-Hyprland installer?"; then
+        print_warning "Cancelled."
+        return
+    fi
+
+    local INSTALL_DIR="$HOME/Fedora-Hyprland"
+
+    if [[ -d "$INSTALL_DIR" ]]; then
+        print_warning "Directory $INSTALL_DIR already exists — pulling latest..."
+        git -C "$INSTALL_DIR" pull 2>&1 | tee -a "$LOG_FILE"
+    else
+        print_section "Cloning JaKooLit Fedora-Hyprland..."
+        git clone --depth=1 https://github.com/JaKooLit/Fedora-Hyprland.git "$INSTALL_DIR" \
+            2>&1 | tee -a "$LOG_FILE"
+    fi
+
+    chmod +x "$INSTALL_DIR/install.sh"
+
+    print_section "Launching JaKooLit installer (interactive whiptail wizard)..."
+    echo -e "${YELLOW}  The installer will now take over. Follow the on-screen prompts.${NC}"
+    echo ""
+    sleep 2
+
+    cd "$INSTALL_DIR" && bash install.sh
+    log "JaKooLit Fedora-Hyprland installer launched"
+}
+
+# ── Preset 2: ML4W ─────────────────────────────────────────────────────────
+_hyprland_ml4w() {
+    print_section "ML4W — Professional Hyprland Dotfiles"
+
+    echo ""
+    echo -e "${CYAN}  About ML4W:${NC}"
+    echo "  • Glass / material color theme — adapts to your wallpaper"
+    echo "  • GUI settings app (toggle borders, blur, animations without editing code)"
+    echo "  • Global Glass Waybar with center workspace selector"
+    echo "  • Officially supports Fedora, Arch, openSUSE Tumbleweed"
+    echo "  • Dotfiles installer app with full setup scripts"
+    echo "  • Repo: https://github.com/mylinuxforwork/dotfiles"
+    echo ""
+    echo -e "${YELLOW}  Requirements:${NC}"
+    echo "  • Wayland session required (no X11)"
+    echo "  • Recommended: fresh/minimal Fedora install"
+    echo ""
+
+    if ! confirm_action "Launch ML4W stable installer?"; then
+        print_warning "Cancelled."
+        return
+    fi
+
+    print_section "Launching ML4W installer..."
+    echo -e "${YELLOW}  Fetching and running the ML4W stable install script...${NC}"
+    echo ""
+    sleep 1
+
+    bash <(curl -s https://ml4w.com/os/stable) 2>&1 | tee -a "$LOG_FILE"
+    log "ML4W Hyprland installer launched"
+}
+
+# ── Preset 3: end-4 (illogical-impulse) ────────────────────────────────────
+_hyprland_end4() {
+    print_section "end-4 — illogical-impulse Hyprland Dotfiles"
+
+    echo ""
+    echo -e "${CYAN}  About end-4:${NC}"
+    echo "  • Most starred Hyprland dotfiles on GitHub (~14k ⭐)"
+    echo "  • GNOME-like UX — familiar keybinds for Windows/GNOME users"
+    echo "  • AI sidebar: ChatGPT & Gemini integrated on your desktop"
+    echo "  • Live adaptive color generation from wallpaper"
+    echo "  • Fancy notification center, music controls, calendar widget"
+    echo "  • Quickshell-based status bar and sidebars"
+    echo "  • Hit Super+/ for a full keybind cheat-sheet"
+    echo "  • Repo: https://github.com/end-4/dots-hyprland"
+    echo ""
+    echo -e "${YELLOW}  Requirements:${NC}"
+    echo "  • Arch-based distro recommended; Fedora support is community-maintained"
+    echo "  • curl must be installed (already in your DNF packages)"
+    echo ""
+    echo -e "${RED}  Note: end-4 targets Arch primarily. On Fedora some packages may need${NC}"
+    echo -e "${RED}  manual adjustment. Proceed with that in mind.${NC}"
+    echo ""
+
+    if ! confirm_action "Launch end-4 installer?"; then
+        print_warning "Cancelled."
+        return
+    fi
+
+    print_section "Launching end-4 installer..."
+    echo -e "${YELLOW}  Fetching and running the end-4 install script...${NC}"
+    echo ""
+    sleep 1
+
+    bash <(curl -s https://ii.clsty.link/get) 2>&1 | tee -a "$LOG_FILE"
+    log "end-4 illogical-impulse Hyprland installer launched"
+}
+
+#===========================================
 # MAIN MENU
 #===========================================
 
@@ -5768,7 +5917,7 @@ show_menu() {
     echo "  1)  Install EVERYTHING"
     echo ""
     echo "  -- Package Installation --"
-    echo "  2)  Setup Repositories (RPM Fusion, Flathub)"
+    echo "  2)  Setup Repositories (RPM Fusion, Flathub, Terra (fyralabs) Repo)"
     echo "  3)  Install DNF Packages"
     echo "  4)  Install Flatpak Applications"
     echo "  5)  Clone & Build GitHub Repos"
@@ -5782,24 +5931,26 @@ show_menu() {
     echo "  -- Development Tools --"
     echo "  10) Install Rust"
     echo "  11) Install NVM (Node Version Manager)"
+    echo "  12) Install & Setup Homebrew (Linuxbrew)"
+    echo "  13) Install Winboat"
     echo ""
     echo "  -- Drivers & Apps --"
-    echo "  12) Install NVIDIA Drivers"
-    echo "  13) Install AppImages (Helium, Capacities, Affinity Installer)"
+    echo "  14) Install NVIDIA Drivers"
+    echo "  15) Install AppImages (Helium, Capacities, Affinity Installer)"
     echo ""
     echo "  -- Security --"
-    echo "  14) Install & Configure ClamAV Antivirus"
-    echo "  15) Linux Security Hardening (Chris Titus)"
-    echo "  16) JShielder -- Full System Hardening (KDE Edition)"
+    echo "  16) Install & Configure ClamAV Antivirus"
+    echo "  17) Linux Security Hardening (Chris Titus)"
+    echo "  18) JShielder -- Full System Hardening (KDE Edition)"
     echo ""
     echo "  -- Privacy & Network --"
-    echo "  17) Privacy & Network Tools (Tor, MAC spoof, WireGuard, DNS-DoT)"
+    echo "  19) Privacy & Network Tools (Tor, MAC spoof, WireGuard, DNS-DoT)"
     echo ""
     echo "  -- Storage --"
-    echo "  18) Auto Mount All Drives"
+    echo "  20) Auto Mount All Drives"
     echo ""
     echo "  -- Help & Learning --"
-    echo "  19) NOOBS GUIDE -- Learn Fedora Linux"
+    echo "  21) NOOBS GUIDE -- Learn Fedora Linux"
     echo ""
     echo "  -- Extra Security: !!Use at your own Risk!! --"
     echo "  22) GRUB Hardening + Kernel Lockdown"
@@ -5813,13 +5964,12 @@ show_menu() {
     echo "  -- Hacking Tools --"
     echo "  27) Hacking Tools -- Kali Linux Toolkit"
     echo ""
-    echo "  -- Maintenance --"
-    echo "  20) Backup Configs (Dotfiles, SSH, Themes)"
-    echo "  21) Restore Configs (From previous backup)"
+    echo "  -- Hyprland --"
+    echo "  28) Install Hyprland + Dotfiles (JaKooLit / ML4W / end-4)"
     echo ""
     echo "  0)  Exit"
     echo ""
-    read -rp "  Select an option [0-27]: " choice
+    read -rp "  Select an option [0-28]: " choice
 }
 
 install_everything() {
@@ -5842,6 +5992,8 @@ install_everything() {
     configure_fastfetch
     install_rust
     install_nvm
+    install_homebrew
+    install_winboat
     install_nvidia_drivers
     install_appimages
     install_clamav
@@ -5903,22 +6055,23 @@ while true; do
         9)  install_nerd_fonts ;;
         10) install_rust ;;
         11) install_nvm ;;
-        12) install_nvidia_drivers ;;
-        13) install_appimages ;;
-        14) install_clamav ;;
-        15) install_linux_hardening ;;
-        16) install_jshielder_hardening ;;
-        17) privacy_network_menu ;;
-        18) automount_drives ;;
-        19) noobs_guide_menu ;;
-        20) backup_configs ;;
-        21) restore_configs ;;
+        12) install_homebrew ;;
+        13) install_winboat ;;
+        14) install_nvidia_drivers ;;
+        15) install_appimages ;;
+        16) install_clamav ;;
+        17) install_linux_hardening ;;
+        18) install_jshielder_hardening ;;
+        19) privacy_network_menu ;;
+        20) automount_drives ;;
+        21) noobs_guide_menu ;;
         22) install_grub_hardening ;;
         23) run_lynis_audit ;;
         24) check_and_setup_encryption ;;
         25) install_systemd_hardening ;;
         26) harden_browser_privacy ;;
         27) hacking_tools_menu ;;
+        28) install_hyprland ;;
         0)
             echo -e "\n${GREEN}Goodbye! Sweet Heart <3${NC}\n"
             exit 0
