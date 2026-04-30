@@ -1,17 +1,14 @@
 <div align="center">
-
----
 ███████╗███████╗██████╗  ██████╗ ██████╗  █████╗
 ██╔════╝██╔════╝██╔══██╗██╔═══██╗██╔══██╗██╔══██╗
 █████╗  █████╗  ██║  ██║██║   ██║██████╔╝███████║
 ██╔══╝  ██╔══╝  ██║  ██║██║   ██║██╔══██╗██╔══██║
 ██║     ███████╗██████╔╝╚██████╔╝██║  ██║██║  ██║
 ╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
-
----
-
+ 
 **A modular, interactive post-install setup script for Fedora Linux.**  
 Packages · Security · Privacy · Dev Tools · Hyprland — all from one terminal menu.
+
 
 ![Fedora](https://img.shields.io/badge/Fedora-41%2B-blue?logo=fedora&logoColor=white)
 ![Shell](https://img.shields.io/badge/Shell-Bash-green?logo=gnubash&logoColor=white)
