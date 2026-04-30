@@ -9,8 +9,8 @@
 #  ╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝
 #
 #      Invisible Migration from Windows + Full Setup + Easy of Comfort
-#   Version: 0.8 --beta
-#   Modules: Fedora · Browsers Harding · Security · VPN · Privacy · More
+#   Version: 1.0.v
+#   Modules: Winboat · Browsers Harding · Security · VPN · Privacy · More
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
 # -e  : exit on first error
@@ -25,6 +25,50 @@ YELLOW='\033[0;33m'
 CYAN='\033[0;36m'
 WHITE='\033[1;37m'
 NC='\033[0m'
+
+#===========================================
+# PROGRESS / SPINNER UTILITIES
+#===========================================
+
+# Animated spinner — wraps a background command and shows a live spinner.
+# Usage:  run_with_spinner "Label text" command [args...]
+# The command's stdout+stderr are appended to LOG_FILE; the spinner is shown
+# on the terminal so the user knows something is happening.
+run_with_spinner() {
+    local label="$1"; shift
+    local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    local i=0
+
+    # Run the command in background, capture its PID
+    "$@" >> "$LOG_FILE" 2>&1 &
+    local cmd_pid=$!
+
+    tput civis 2>/dev/null || true   # hide cursor
+    while kill -0 "$cmd_pid" 2>/dev/null; do
+        local char="${spin_chars:$(( i % ${#spin_chars} )):1}"
+        printf "  ${CYAN}%s${NC} %s\r" "$char" "$label"
+        sleep 0.1
+        (( i++ )) || true
+    done
+    tput cnorm 2>/dev/null || true   # restore cursor
+    printf "  %-60s\r" ""           # clear spinner line
+
+    # Propagate exit code
+    wait "$cmd_pid"
+}
+
+# Simple inline progress bar for counted loops.
+# Usage:  print_progress_bar current total label
+print_progress_bar() {
+    local current=$1 total=$2 label="${3:-}"
+    local width=40
+    local filled=$(( current * width / total ))
+    local empty=$(( width - filled ))
+    local bar
+    bar="$(printf '%0.s█' $(seq 1 $filled))$(printf '%0.s░' $(seq 1 $empty))"
+    printf "  [%s] %d/%d %s\r" "$bar" "$current" "$total" "$label"
+    [[ "$current" -eq "$total" ]] && printf "\n"
+}
 
 # Directories
 GITHUB_DIR="$HOME/GitHub"
@@ -68,6 +112,8 @@ DNF_PACKAGES=(
     unzip
     jq
     fzf
+    lazygit
+    rust
 
     # Games
     dosbox
@@ -89,17 +135,18 @@ DNF_PACKAGES=(
     # Fonts
     fira-code-fonts
     jetbrains-mono-fonts
+    jebrains-fonts
 )
 
 # Flatpak Applications
 FLATPAK_PACKAGES=(
     # Communication
     "com.discordapp.Discord"
-    "org.telegram.desktop"
+    #"org.telegram.desktop"
     "org.signal.Signal"
 
     # Productivity
-    "md.obsidian.Obsidian"
+    #"md.obsidian.Obsidian"
     "org.onlyoffice.desktopeditors"
 
     # Development
@@ -125,15 +172,14 @@ FLATPAK_PACKAGES=(
     "org.qbittorrent.qBittorrent"
 
     # Browsers
-    "com.brave.Browser"
+    #"com.brave.Browser"
     "app.zen_browser.zen"
     "io.gitlab.librewolf-community"
 
     # Utilities
-    "org.flameshot.Flameshot"
-    "io.github.peazip.PeaZip"
-    "io.github.ilya_zlobintsev.LACT"
-    "io.ente.auth"
+    #"org.flameshot.Flameshot"
+    #"io.github.peazip.PeaZip"
+    #"io.github.ilya_zlobintsev.LACT"
     "org.localsend.localsend_app"
     "com.github.wwmm.easyeffects"
 )
@@ -216,7 +262,8 @@ setup_repositories() {
 
     print_section "Installing RPM Fusion Free"
     if ! rpm -q rpmfusion-free-release &>/dev/null; then
-        sudo dnf install -y \
+        run_with_spinner "Installing RPM Fusion Free..." \
+            sudo dnf install -y \
             "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm"
         print_success "RPM Fusion Free installed"
     else
@@ -225,7 +272,8 @@ setup_repositories() {
 
     print_section "Installing RPM Fusion Non-Free"
     if ! rpm -q rpmfusion-nonfree-release &>/dev/null; then
-        sudo dnf install -y \
+        run_with_spinner "Installing RPM Fusion Non-Free..." \
+            sudo dnf install -y \
             "https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
         print_success "RPM Fusion Non-Free installed"
     else
@@ -233,17 +281,17 @@ setup_repositories() {
     fi
 
     print_section "Setting up Flathub"
-    flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+    run_with_spinner "Adding Flathub remote..." \
+        flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
     print_success "Flathub configured"
 
     print_section "Adding Terra repository (fyralabs)"
     if dnf repolist | grep -q "terra"; then
         print_warning "Terra repo already configured"
     else
-        sudo dnf install -y \
-            "https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo" 2>/dev/null || \
-        sudo dnf config-manager --add-repo \
-            "https://terra.fyralabs.com/terra.repo" 2>/dev/null || true
+        run_with_spinner "Adding Terra repository..." \
+            bash -c 'sudo dnf install -y "https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo" 2>/dev/null || \
+            sudo dnf config-manager --add-repo "https://terra.fyralabs.com/terra.repo" 2>/dev/null || true'
         # Fallback: write the repo file directly
         if ! dnf repolist 2>/dev/null | grep -q "terra"; then
             sudo tee /etc/yum.repos.d/terra.repo > /dev/null << 'TERRA_REPO'
@@ -265,7 +313,8 @@ install_dnf_packages() {
     print_header "Installing DNF Packages"
 
     print_section "Updating system"
-    sudo dnf update -y
+    run_with_spinner "Updating system packages (dnf update)..." sudo dnf update -y
+    print_success "System up to date"
 
     # ── Batch install ──────────────────────────────────────────────────
     # Build the to-install list first, then call dnf ONCE for the whole
@@ -273,8 +322,11 @@ install_dnf_packages() {
     # package metadata N times.  Now: one metadata load, one transaction.
     # Typical speedup: ~5 min → ~30 sec for this package list.
     print_section "Checking installed packages"
-    local to_install=() pkg
+    local to_install=() pkg total_pkgs i=0
+    total_pkgs=${#DNF_PACKAGES[@]}
     for pkg in "${DNF_PACKAGES[@]}"; do
+        (( i++ )) || true
+        print_progress_bar "$i" "$total_pkgs" "$pkg"
         if rpm -q "$pkg" &>/dev/null; then
             echo -e "  ${YELLOW}already installed:${NC} $pkg"
         else
@@ -288,8 +340,8 @@ install_dnf_packages() {
     fi
 
     print_section "Installing ${#to_install[@]} package(s) in one transaction..."
-    # Use PIPESTATUS to catch dnf exit code even when piped through tee
-    sudo dnf install -y "${to_install[@]}" 2>&1 | tee -a "$LOG_FILE"; local _dnf_rc=${PIPESTATUS[0]}
+    run_with_spinner "Installing DNF packages..." sudo dnf install -y "${to_install[@]}"
+    local _dnf_rc=$?
     if [[ $_dnf_rc -eq 0 ]]; then
         print_success "All packages installed"
     else
@@ -307,8 +359,11 @@ install_flatpak_packages() {
     local installed_list
     installed_list=$(flatpak list --app --columns=application 2>/dev/null)
 
-    local to_install=() app
+    local to_install=() app total_apps i=0
+    total_apps=${#FLATPAK_PACKAGES[@]}
     for app in "${FLATPAK_PACKAGES[@]}"; do
+        (( i++ )) || true
+        print_progress_bar "$i" "$total_apps" "$(basename "$app")"
         if echo "$installed_list" | grep -qF "$app"; then
             echo -e "  ${YELLOW}already installed:${NC} $app"
         else
@@ -476,7 +531,7 @@ install_github_releases() {
         mkdir -p "$dl_dir"
 
         echo "  Downloading $binary_name..."
-        if ! curl -sfL "$download_url" -o "$dl_dir/$filename"; then
+        if ! curl -L --progress-bar "$download_url" -o "$dl_dir/$filename"; then
             echo -e "  ${RED}✗ Download failed: $binary_name${NC}"
             log "Download failed: $binary_name"
             return
@@ -539,12 +594,14 @@ install_oh_my_posh() {
     fi
 
     print_section "Downloading Oh My Posh..."
-    curl -s https://ohmyposh.dev/install.sh | bash -s -- -d "$LOCAL_BIN"
+    curl -s https://ohmyposh.dev/install.sh -o /tmp/omp_install.sh
+    run_with_spinner "Installing Oh My Posh..." bash /tmp/omp_install.sh -d "$LOCAL_BIN"
+    rm -f /tmp/omp_install.sh
 
     mkdir -p "$HOME/.config/oh-my-posh/themes"
 
     print_section "Downloading themes..."
-    wget -q https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/themes.zip \
+    wget -q --show-progress https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/themes.zip \
         -O /tmp/themes.zip
     unzip -o -q /tmp/themes.zip -d "$HOME/.config/oh-my-posh/themes"
     rm /tmp/themes.zip
@@ -581,7 +638,7 @@ configure_fastfetch() {
 
     if ! check_command fastfetch; then
         print_warning "Fastfetch not installed. Installing..."
-        sudo dnf install -y fastfetch
+        run_with_spinner "Installing fastfetch..." sudo dnf install -y fastfetch
     fi
 
     mkdir -p "$HOME/.config/fastfetch"
@@ -667,76 +724,6 @@ EOF
 # ADDITIONAL INSTALLERS
 #===========================================
 
-install_nerd_fonts() {
-    print_header "Installing Nerd Fonts"
-
-    local font_dir="$HOME/.local/share/fonts"
-    mkdir -p "$font_dir"
-
-    # ── Download both fonts in parallel ───────────────────────────────
-    # Previously: sequential wget (download A → unzip A → download B → unzip B).
-    # Now: both downloads happen simultaneously, cutting wall-clock time ~50 %.
-    _dl_font() {
-        local name="$1" url="$2" dir="$3"
-        echo "  Fetching $name..."
-        if wget -q --show-progress "$url" -O "$dir/${name}.zip"; then
-            unzip -o -q "$dir/${name}.zip" -d "$dir"
-            rm "$dir/${name}.zip"
-            echo -e "  ${GREEN}✓ $name installed${NC}"
-        else
-            echo -e "  ${RED}✗ $name download failed${NC}"
-        fi
-    }
-
-    _dl_font "JetBrainsMono" \
-        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.zip" \
-        "$font_dir" &
-    local pid1=$!
-
-    _dl_font "FiraCode" \
-        "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/FiraCode.zip" \
-        "$font_dir" &
-    local pid2=$!
-
-    wait "$pid1" || true
-    wait "$pid2" || true
-
-    print_section "Refreshing font cache..."
-    fc-cache -fv &>> "$LOG_FILE"
-
-    print_success "Nerd Fonts installed"
-    echo -e "  ${CYAN}Set your terminal font to 'JetBrainsMono Nerd Font' or 'FiraCode Nerd Font'${NC}"
-}
-
-install_rust() {
-    print_header "Installing Rust"
-
-    if check_command rustc; then
-        print_warning "Rust already installed"
-        rustc --version
-        return
-    fi
-
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    # shellcheck source=/dev/null
-    source "$HOME/.cargo/env"
-
-    print_success "Rust installed"
-}
-
-install_nvm() {
-    print_header "Installing NVM (Node Version Manager)"
-
-    if [[ -d "$HOME/.nvm" ]]; then
-        print_warning "NVM already installed"
-        return
-    fi
-
-    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-
-    print_success "NVM installed"
-    echo -e "  ${CYAN}Restart terminal, then run: nvm install --lts${NC}"
-}
 
 #===========================================
 # NVIDIA DRIVERS
@@ -772,18 +759,18 @@ install_nvidia_drivers() {
     case "$nvidia_choice" in
         1)
             print_section "Installing akmod-nvidia (standard)..."
-            sudo dnf install -y akmod-nvidia
+            run_with_spinner "Installing akmod-nvidia..." sudo dnf install -y akmod-nvidia
             print_success "akmod-nvidia installed"
             ;;
         2)
             print_section "Installing akmod-nvidia + CUDA support..."
-            sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda
+            run_with_spinner "Installing akmod-nvidia + CUDA..." sudo dnf install -y akmod-nvidia xorg-x11-drv-nvidia-cuda
             print_success "akmod-nvidia + CUDA installed"
             echo -e "  ${CYAN}CUDA libraries installed for GPU compute workloads${NC}"
             ;;
         3)
             print_section "Installing akmod-nvidia-open (open kernel module)..."
-            sudo dnf install -y akmod-nvidia-open
+            run_with_spinner "Installing akmod-nvidia-open..." sudo dnf install -y akmod-nvidia-open
             print_success "akmod-nvidia-open installed"
             echo -e "  ${CYAN}Open kernel module is recommended for Turing (RTX 20xx) and newer${NC}"
             ;;
@@ -2173,309 +2160,9 @@ install_jshielder_hardening() {
 # optional GRUB superuser password.
 #===========================================
 
-install_grub_hardening() {
-    print_header "GRUB Hardening + Kernel Lockdown"
 
-    [[ -f /etc/default/grub ]] && sudo cp /etc/default/grub \
-        "${JSHIELDER_BACKUP_DIR}/grub.bak.$(date +%Y%m%d_%H%M%S)" 2>/dev/null || true
 
-    # ── Kernel lockdown=confidentiality ──────────────────────────────
-    # Blocks: unsigned kernel modules, /dev/mem reads, hibernation
-    # exploits, kprobes, raw BPF writes — even from root.
-    print_section "Enabling kernel lockdown=confidentiality..."
-    if ! grep -q "lockdown=confidentiality" /etc/default/grub 2>/dev/null; then
-        sudo sed -i \
-            's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 lockdown=confidentiality"/' \
-            /etc/default/grub
-        print_success "lockdown=confidentiality added to kernel cmdline."
-    else
-        print_warning "lockdown=confidentiality already set."
-    fi
 
-    # ── CPU mitigations ───────────────────────────────────────────────
-    # Forces mitigations for Spectre v1/v2, Spectre v4 (SSBD),
-    # L1TF, MDS — disables SMT to fully close MDS side-channels.
-    print_section "Enforcing CPU security mitigations (Spectre/Meltdown/MDS)..."
-    if ! grep -q "mitigations=auto" /etc/default/grub 2>/dev/null; then
-        sudo sed -i \
-            's/GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 mitigations=auto,nosmt spectre_v2=on spec_store_bypass_disable=on l1tf=full,force mds=full,nosmt"/' \
-            /etc/default/grub
-        print_success "CPU exploit mitigations enforced."
-    else
-        print_warning "CPU mitigations already configured."
-    fi
-
-    # ── Disable recovery mode ─────────────────────────────────────────
-    # Recovery entries boot directly to a root shell — no password needed.
-    print_section "Disabling GRUB recovery mode entries..."
-    if grep -q "^GRUB_DISABLE_RECOVERY" /etc/default/grub 2>/dev/null; then
-        sudo sed -i 's/^GRUB_DISABLE_RECOVERY=.*/GRUB_DISABLE_RECOVERY="true"/' /etc/default/grub
-    else
-        echo 'GRUB_DISABLE_RECOVERY="true"' | sudo tee -a /etc/default/grub > /dev/null
-    fi
-    print_success "Recovery mode disabled — prevents root shell bypass at boot."
-
-    # ── GRUB superuser password ───────────────────────────────────────
-    echo ""
-    echo -e "  ${YELLOW}A GRUB password prevents an attacker with physical access from"
-    echo -e "  editing boot parameters to strip SELinux or lockdown at boot time.${NC}"
-    read -rp "  Set GRUB superuser password? [y/N]: " _grub_pw
-    if [[ "${_grub_pw,,}" == "y" ]]; then
-        echo -e "  ${CYAN}Enter a strong password for GRUB superuser 'security':${NC}"
-        local _grub_hash
-        _grub_hash=$(grub2-mkpasswd-pbkdf2 2>/dev/null | grep -o 'grub.pbkdf2.*' || true)
-        if [[ -n "$_grub_hash" ]]; then
-            sudo tee /etc/grub.d/40_custom_security > /dev/null << GRUBPW
-#!/bin/sh
-exec tail -n +3 \$0
-# JShielder Fedora — GRUB superuser (generated $(date))
-set superusers="security"
-password_pbkdf2 security ${_grub_hash}
-GRUBPW
-            sudo chmod 700 /etc/grub.d/40_custom_security
-            print_success "GRUB superuser 'security' configured."
-            print_warning "Remember this password — required to edit GRUB entries."
-        else
-            print_error "grub2-mkpasswd-pbkdf2 failed — skipping GRUB password."
-        fi
-    fi
-
-    # ── Rebuild GRUB ─────────────────────────────────────────────────
-    print_section "Rebuilding GRUB configuration..."
-    if sudo grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null \
-            || sudo grub2-mkconfig -o /boot/efi/EFI/fedora/grub.cfg 2>/dev/null; then
-        print_success "GRUB config rebuilt."
-    else
-        print_warning "grub2-mkconfig failed — run manually:"
-        echo -e "    ${WHITE}sudo grub2-mkconfig -o /boot/grub2/grub.cfg${NC}"
-    fi
-
-    echo ""
-    print_warning "Reboot required for kernel lockdown and CPU mitigations to activate."
-    echo -e "  ${CYAN}After reboot, verify:${NC}"
-    echo -e "    ${WHITE}cat /sys/kernel/security/lockdown${NC}"
-    echo -e "    ${WHITE}grep . /sys/devices/system/cpu/vulnerabilities/*${NC}"
-}
-
-#===========================================
-# LYNIS SECURITY AUDIT (standalone)
-#===========================================
-
-run_lynis_audit() {
-    print_header "Lynis — Full System Security Audit"
-
-    if ! check_command lynis; then
-        print_section "Installing Lynis..."
-        sudo dnf install -y lynis 2>&1 | tee -a "$LOG_FILE"
-    fi
-
-    echo -e "  ${CYAN}Select audit mode:${NC}"
-    echo -e "    ${WHITE}1)${NC} Quick scan (warnings/suggestions summary)"
-    echo -e "    ${WHITE}2)${NC} Full audit — detailed report (recommended)"
-    echo -e "    ${WHITE}3)${NC} Show last saved report"
-    echo -e "    ${WHITE}0)${NC} Cancel"
-    echo ""
-    read -rp "  Choice [2]: " _ly_c; _ly_c="${_ly_c:-2}"
-
-    case "$_ly_c" in
-        1)
-            sudo lynis audit system --quick --no-colors 2>/dev/null \
-                | grep -E "^\[|\bWARNING\b|\bSUGGESTION\b|\bHardening index\b" | head -60
-            ;;
-        2)
-            local _report="$HOME/lynis_report_$(date +%Y%m%d_%H%M%S).txt"
-            sudo lynis audit system --no-colors 2>/dev/null | tee "$_report"
-            echo ""
-            print_success "Full report saved: $_report"
-            echo -e "  ${CYAN}Hardening index:${NC}"
-            grep -i "hardening index" "$_report" 2>/dev/null || true
-            ;;
-        3)
-            local _last
-            _last=$(ls -t "$HOME"/lynis_report_*.txt 2>/dev/null | head -1)
-            if [[ -n "$_last" ]]; then
-                grep -E "WARNING|SUGGESTION|Hardening index" "$_last" | head -60
-                echo -e "  ${CYAN}Full report: $_last${NC}"
-            else
-                print_warning "No previous report found. Run option 2 first."
-            fi
-            ;;
-        0) return ;;
-        *) print_error "Invalid choice" ;;
-    esac
-}
-
-#===========================================
-# DISK ENCRYPTION CHECK + ENCRYPTED SWAP
-#===========================================
-
-check_and_setup_encryption() {
-    print_header "Disk Encryption Check + Encrypted Swap"
-
-    # ── LUKS check ────────────────────────────────────────────────────
-    print_section "Checking LUKS disk encryption status..."
-    local _luks_devs
-    _luks_devs=$(lsblk -o NAME,TYPE 2>/dev/null | awk '/crypt/{print $1}' || true)
-
-    if [[ -n "$_luks_devs" ]]; then
-        print_success "LUKS encryption active: ${_luks_devs}"
-    else
-        local _dm_devs
-        _dm_devs=$(sudo dmsetup ls 2>/dev/null | grep -v "No devices" || true)
-        if [[ -n "$_dm_devs" ]]; then
-            print_success "Device-mapper (likely LUKS) detected:"
-            echo "$_dm_devs" | sed 's/^/    /'
-        else
-            echo ""
-            echo -e "  ${RED}⚠  No LUKS encryption detected on this system.${NC}"
-            echo -e "  ${YELLOW}Full disk encryption must be configured during Fedora install."
-            echo -e "  Reinstall and choose 'Encrypt my data' on the storage screen.${NC}"
-            echo ""
-        fi
-    fi
-
-    # ── Encrypted swap ────────────────────────────────────────────────
-    print_section "Setting up encrypted swap..."
-    local _swap_devs
-    _swap_devs=$(swapon --show=NAME --noheadings 2>/dev/null || true)
-
-    if [[ -z "$_swap_devs" ]]; then
-        print_warning "No active swap found."
-        echo -e "    ${WHITE}1)${NC} Create encrypted swap file (2 GB)"
-        echo -e "    ${WHITE}2)${NC} Skip"
-        read -rp "  Choice [2]: " _sc; _sc="${_sc:-2}"
-        if [[ "$_sc" == "1" ]]; then
-            print_section "Creating 2 GB encrypted swap file..."
-            sudo fallocate -l 2G /swapfile 2>/dev/null \
-                || sudo dd if=/dev/zero of=/swapfile bs=1M count=2048 status=progress
-            sudo chmod 600 /swapfile
-            sudo mkswap /swapfile
-            sudo swapon /swapfile
-            echo "/swapfile none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
-            print_success "Swap file created and activated."
-        fi
-    else
-        local _swap_part
-        _swap_part=$(echo "$_swap_devs" | grep "^/dev/" | head -1 || true)
-
-        if [[ -n "$_swap_part" ]] && ! grep -q "swap.*cipher" /etc/crypttab 2>/dev/null; then
-            echo -e "  ${CYAN}Current swap: ${_swap_part}${NC}"
-            echo -e "  ${YELLOW}Encrypting swap prevents passwords and keys left in swap"
-            echo -e "  from being read after shutdown.${NC}"
-            read -rp "  Encrypt swap ${_swap_part} with random key per boot? [y/N]: " _enc_sw
-            if [[ "${_enc_sw,,}" == "y" ]]; then
-                # Random key per boot — no persistent secret needed for swap
-                echo "cryptswap ${_swap_part} /dev/urandom swap,cipher=aes-xts-plain64,size=256,hash=sha256" \
-                    | sudo tee -a /etc/crypttab > /dev/null
-                sudo sed -i "s|${_swap_part}|/dev/mapper/cryptswap|g" /etc/fstab 2>/dev/null || true
-                grep -q "cryptswap" /etc/fstab || \
-                    echo "/dev/mapper/cryptswap none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
-                sudo dracut --force 2>/dev/null || true
-                print_success "Encrypted swap configured (new random key every boot)."
-                print_warning "Reboot required to activate."
-            fi
-        else
-            print_success "Swap is already encrypted or inside an encrypted volume."
-        fi
-    fi
-
-    # ── Hibernation / suspend-to-disk ────────────────────────────────
-    print_section "Checking hibernation (suspend-to-disk) status..."
-    if grep -rq "resume=" /etc/default/grub 2>/dev/null \
-            || grep -rq "resume=" /etc/kernel/cmdline 2>/dev/null; then
-        print_warning "Hibernation is enabled — writes RAM (incl. keys) to swap unencrypted."
-        read -rp "  Disable hibernation? (recommended unless you need it) [Y/n]: " _hib
-        if [[ ! "${_hib,,}" == "n" ]]; then
-            sudo sed -i 's/ resume=[^ "]*//g' /etc/default/grub 2>/dev/null || true
-            sudo grub2-mkconfig -o /boot/grub2/grub.cfg 2>/dev/null \
-                || sudo grub2-mkconfig -o /boot/efi/EFI/fedora/grub.cfg 2>/dev/null || true
-            print_success "Hibernation disabled."
-        fi
-    else
-        print_success "Hibernation not configured — good."
-    fi
-}
-
-#===========================================
-# SYSTEMD SERVICE HARDENING + IMMUTABLE FILES
-#===========================================
-
-install_systemd_hardening() {
-    print_header "Systemd Service Hardening + Immutable Files"
-
-    # ── Per-service security overrides ───────────────────────────────
-    # NoNewPrivileges: service cannot gain extra privileges via setuid
-    # PrivateTmp:      service gets its own isolated /tmp
-    # ProtectSystem:   /usr and /boot read-only for the service
-    # ProtectHome:     service cannot read /home
-    print_section "Applying hardened systemd overrides to common services..."
-    local services=(sshd crond rsyslog systemd-resolved NetworkManager)
-    for svc in "${services[@]}"; do
-        if systemctl list-unit-files "${svc}.service" &>/dev/null 2>&1; then
-            local _odir="/etc/systemd/system/${svc}.service.d"
-            sudo mkdir -p "$_odir"
-            sudo tee "${_odir}/hardening.conf" > /dev/null << SVCCONF
-[Service]
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectHome=read-only
-ProtectSystem=strict
-ReadWritePaths=/var/run /var/log /tmp
-SVCCONF
-            print_success "Hardened: ${svc}.service"
-        fi
-    done
-    sudo systemctl daemon-reload 2>/dev/null || true
-
-    # ── Immutable flag on critical files ─────────────────────────────
-    # chattr +i means even root cannot modify without first doing chattr -i.
-    # This stops a compromised root process silently editing passwd/shadow.
-    print_section "Setting immutable flag on critical system files..."
-    local _immutable_files=(
-        /etc/passwd
-        /etc/shadow
-        /etc/group
-        /etc/gshadow
-        /etc/sudoers
-        /etc/ssh/sshd_config
-    )
-    for f in "${_immutable_files[@]}"; do
-        if [[ -f "$f" ]]; then
-            sudo chattr +i "$f" 2>/dev/null \
-                && print_success "Immutable: $f" \
-                || print_warning "chattr +i failed on $f (filesystem may not support it)"
-        fi
-    done
-    echo ""
-    print_warning "To edit these files later: sudo chattr -i <file>  (then re-run chattr +i after)"
-
-    # ── Logwatch daily security digest ───────────────────────────────
-    print_section "Configuring Logwatch daily security digest..."
-    if ! check_command logwatch; then
-        sudo dnf install -y logwatch 2>&1 | tee -a "$LOG_FILE"
-    fi
-    sudo tee /etc/logwatch/conf/logwatch.conf > /dev/null << 'LOGWATCH'
-LogDir = /var/log
-TmpDir = /var/cache/logwatch
-Output = stdout
-Format = text
-MailTo = root
-MailFrom = logwatch
-Range = yesterday
-Detail = Med
-Service = All
-LOGWATCH
-    sudo tee /etc/cron.daily/00logwatch > /dev/null << 'LOGWATCHCRON'
-#!/bin/bash
-/usr/sbin/logwatch --output mail --mailto root --detail high 2>/dev/null || true
-LOGWATCHCRON
-    sudo chmod +x /etc/cron.daily/00logwatch
-    print_success "Logwatch daily digest scheduled (results mailed to root)."
-
-    echo ""
-    print_warning "Reboot recommended to fully apply systemd sandbox changes."
-    echo -e "  ${CYAN}To read security digest:${NC} ${WHITE}sudo logwatch --output stdout --detail high${NC}"
-}
 
 #===========================================
 # BROWSER PRIVACY HARDENING
@@ -3489,7 +3176,7 @@ EOF
 _priv_install_tor() {
     if ! command -v tor &>/dev/null; then
         _priv_info "Installing Tor..."
-        if ! sudo dnf install -y tor; then
+        if ! run_with_spinner "Installing Tor..." sudo dnf install -y tor; then
             _priv_error "Failed to install Tor."
             return 1
         fi
@@ -4334,7 +4021,7 @@ install_yggdrasil() {
 
     # ── STEP 1: System update ────────────────────────────────────────────────
     print_section "Updating system packages..."
-    sudo dnf update -y -q
+    run_with_spinner "Updating system packages..." sudo dnf update -y -q
     _ygg_ok "System up to date."
 
     # ── STEP 2: Install via official COPR ───────────────────────────────────
@@ -4342,8 +4029,8 @@ install_yggdrasil() {
     #   dnf copr enable neilalexander/yggdrasil-go
     #   dnf install yggdrasil
     print_section "Installing Yggdrasil (official COPR: neilalexander/yggdrasil-go)..."
-    sudo dnf copr enable -y neilalexander/yggdrasil-go
-    sudo dnf install -y yggdrasil
+    run_with_spinner "Enabling COPR repository..." sudo dnf copr enable -y neilalexander/yggdrasil-go
+    run_with_spinner "Installing Yggdrasil..." sudo dnf install -y yggdrasil
     local _ygg_ver
     _ygg_ver=$(yggdrasil -version 2>/dev/null | awk '{print $NF}' || echo "unknown")
     _ygg_ok "Installed — version: ${_ygg_ver}"
@@ -4519,7 +4206,7 @@ DESK
 
 #=============================================================================
 # PRIVACY & NETWORK — SUB-MENU
-# Called from main menu option 17. Does NOT call exit 0 — returns to main.
+# Called from main menu option 16. Does NOT call exit 0 — returns to main.
 #=============================================================================
 privacy_network_menu() {
     print_header "Privacy & Network Tools"
@@ -5147,7 +4834,7 @@ PYCLEAN
 
     if $do_fstab; then
         echo -e "  ${CYAN}Drives will remount automatically on every boot.${NC}"
-        echo -e "  ${CYAN}To undo: run option 18 → sub-option 6 (Remove fstab entries).${NC}"
+        echo -e "  ${CYAN}To undo: run option 15 → sub-option 6 (Remove fstab entries).${NC}"
     else
         echo -e "  ${YELLOW}Note: Mounts are SESSION ONLY (no fstab). Reboot will lose them.${NC}"
         echo -e "  ${YELLOW}Run again and choose option 2 to make them permanent.${NC}"
@@ -5557,8 +5244,8 @@ _nb_guide_this_script() {
     _nb_step "3" "Option 4  — Install Flatpak Apps"
     _nb_explain "  Installs VS Code, VLC, browser, gaming tools, and more."
     echo ""
-    _nb_step "4" "Option 9  — Install Nerd Fonts"
-    _nb_explain "  Required for Oh My Posh and Fastfetch to look correct."
+    _nb_step "4" "Option 9  — Install & Setup Homebrew"
+    _nb_explain "  Provides additional Linux packages via Linuxbrew."
     echo ""
     _nb_step "5" "Option 7  — Install Oh My Posh"
     _nb_explain "  Gives your terminal a beautiful, information-rich prompt."
@@ -5709,38 +5396,163 @@ install_homebrew() {
 #===========================================
 
 install_winboat() {
-    print_header "Install Winboat"
+    print_header "Installing WinBoat — Windows Apps on Linux"
 
-    # Winboat is distributed via the Terra (fyralabs) repository.
-    # Make sure Terra is available before trying to install.
-    if ! dnf repolist 2>/dev/null | grep -q "terra"; then
-        print_warning "Terra repository not found — adding it now (required for Winboat)."
-        setup_repositories
+    echo ""
+    echo -e "  ${CYAN}WinBoat runs Windows inside a Podman/Docker container and streams${NC}"
+    echo -e "  ${CYAN}apps to your desktop via FreeRDP — no dual-boot needed.${NC}"
+    echo ""
+    echo -e "  ${YELLOW}Hardware requirements:${NC}"
+    echo -e "    • At least 4 GB RAM and 2 CPU threads"
+    echo -e "    • At least 32 GB free disk space"
+    echo -e "    • KVM virtualisation enabled in BIOS/UEFI"
+    echo ""
+
+    if ! confirm_action "Proceed with WinBoat installation?"; then
+        print_warning "Cancelled."
+        return
     fi
 
-    if rpm -q winboat &>/dev/null; then
-        print_warning "Winboat is already installed."
-        if ! confirm_action "Reinstall / upgrade Winboat?"; then
-            return
-        fi
-    fi
-
-    print_section "Installing Winboat via DNF (Terra repo)"
-    if sudo dnf install -y winboat 2>&1 | tee -a "$LOG_FILE"; then
-        print_success "Winboat installed successfully!"
-        log "Winboat installed"
+    # ── 1. Check KVM support ───────────────────────────────────────────
+    print_section "Checking KVM virtualisation support..."
+    if [[ -e /dev/kvm ]]; then
+        print_success "KVM is available (/dev/kvm found)"
     else
-        print_error "DNF install failed — trying Flatpak fallback..."
-        # Flatpak fallback in case the Terra package is unavailable for this Fedora version
-        if flatpak install -y flathub net.davidotek.pupgui2 2>&1 | tee -a "$LOG_FILE"; then
-            print_success "ProtonUp-Qt (Flatpak) installed as Winboat alternative."
-            log "ProtonUp-Qt installed as Winboat fallback"
+        print_error "/dev/kvm not found — KVM must be enabled in your BIOS/UEFI."
+        print_warning "Enable virtualisation / VT-x / AMD-V in BIOS, then re-run this option."
+        return 1
+    fi
+
+    # ── 2. Choose containerisation backend ────────────────────────────
+    echo ""
+    echo -e "  ${CYAN}Choose containerisation backend:${NC}"
+    echo -e "    ${WHITE}1)${NC} Podman  (recommended — no root daemon required)"
+    echo -e "    ${WHITE}2)${NC} Docker"
+    echo ""
+    read -rp "  Select [1/2]: " wb_backend
+    case "$wb_backend" in
+        2) wb_backend="docker" ;;
+        *) wb_backend="podman" ;;
+    esac
+    print_success "Backend selected: $wb_backend"
+
+    # ── 3. Install prerequisites ───────────────────────────────────────
+    print_section "Installing prerequisites..."
+
+    if [[ "$wb_backend" == "podman" ]]; then
+        local prereqs=(podman podman-compose freerdp)
+        print_section "Installing Podman + podman-compose + FreeRDP..."
+        run_with_spinner "Installing Podman prerequisites..." \
+            sudo dnf install -y "${prereqs[@]}"
+
+        # Verify FreeRDP version is 3.x
+        local frp_ver
+        frp_ver=$(freerdp3 --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1 \
+                  || xfreerdp3 --version 2>/dev/null | grep -oP '\d+\.\d+\.\d+' | head -1 \
+                  || echo "unknown")
+        if [[ "$frp_ver" == unknown ]]; then
+            print_warning "FreeRDP 3.x binary not detected — WinBoat needs freerdp3 / xfreerdp3."
+            print_warning "Try: sudo dnf install -y freerdp3"
         else
-            print_error "Both install methods failed — check $LOG_FILE"
-            log "Winboat install failed"
-            return 1
+            print_success "FreeRDP version: $frp_ver"
+        fi
+
+        # Enable the Podman socket so WinBoat can talk to it
+        print_section "Enabling Podman socket (user session)..."
+        systemctl --user enable --now podman.socket 2>&1 | tee -a "$LOG_FILE" || \
+            print_warning "Could not enable podman.socket — you may need to log out and back in."
+        print_success "Podman socket enabled"
+
+    else
+        # Docker path
+        local prereqs=(docker docker-compose-plugin freerdp)
+        print_section "Installing Docker + docker-compose-plugin + FreeRDP..."
+        run_with_spinner "Installing Docker prerequisites..." \
+            sudo dnf install -y "${prereqs[@]}"
+
+        print_section "Enabling Docker daemon..."
+        sudo systemctl enable --now docker 2>&1 | tee -a "$LOG_FILE"
+        if systemctl is-active --quiet docker; then
+            print_success "Docker daemon is running"
+        else
+            print_error "Docker daemon failed to start — check: journalctl -u docker"
+        fi
+
+        # Add user to docker group
+        if getent group docker &>/dev/null; then
+            sudo gpasswd -a "${USER}" docker 2>/dev/null \
+                && print_success "Added ${USER} to docker group (log out/in required)" \
+                || print_warning "Could not add ${USER} to docker group"
         fi
     fi
+
+    # ── 4. Download latest WinBoat RPM from GitHub releases ───────────
+    print_section "Fetching latest WinBoat release from GitHub..."
+
+    local api_url="https://api.github.com/repos/TibixDev/winboat/releases/latest"
+    local rpm_url
+    rpm_url=$(curl -sf "$api_url" \
+        | grep -oP '"browser_download_url":\s*"\K[^"]+' \
+        | grep '\.rpm$' \
+        | head -1) || true
+
+    if [[ -z "$rpm_url" ]]; then
+        print_error "Could not fetch WinBoat release URL from GitHub API."
+        print_warning "Visit https://github.com/TibixDev/winboat/releases and install the .rpm manually."
+        return 1
+    fi
+
+    local rpm_file="/tmp/winboat-latest.rpm"
+    print_section "Downloading WinBoat RPM: $(basename "$rpm_url")..."
+    if ! curl -L --progress-bar "$rpm_url" -o "$rpm_file" 2>&1 | tee -a "$LOG_FILE"; then
+        print_error "Download failed — check your connection."
+        return 1
+    fi
+    print_success "Downloaded to $rpm_file"
+
+    # ── 5. Install the RPM ─────────────────────────────────────────────
+    print_section "Installing WinBoat RPM..."
+    # --allowerasing handles .build-id file conflicts with other Electron apps (e.g. Lens)
+    if sudo dnf install -y --allowerasing "$rpm_file" 2>&1 | tee -a "$LOG_FILE"; then
+        print_success "WinBoat installed successfully!"
+        log "WinBoat installed from $rpm_url"
+    else
+        print_error "RPM install failed — check $LOG_FILE"
+        rm -f "$rpm_file"
+        return 1
+    fi
+    rm -f "$rpm_file"
+
+    # ── 6. Load optional kernel modules for better network performance ─
+    print_section "Loading optional kernel modules..."
+    for mod in iptable_nat nf_nat; do
+        if sudo modprobe "$mod" 2>/dev/null; then
+            print_success "Loaded: $mod"
+        else
+            print_warning "Could not load $mod (non-critical, network autodiscovery may be limited)"
+        fi
+    done
+
+    # ── 7. Summary ─────────────────────────────────────────────────────
+    echo ""
+    print_success "WinBoat setup complete!"
+    echo ""
+    echo -e "  ${CYAN}Next steps:${NC}"
+    if [[ "$wb_backend" == "podman" ]]; then
+        echo -e "    1. Log out and back in (so Podman session picks up properly)"
+    else
+        echo -e "    1. Log out and back in (so docker group membership takes effect)"
+    fi
+    echo -e "    2. Launch WinBoat from your app menu or run: ${WHITE}winboat${NC}"
+    echo -e "    3. Follow the in-app wizard to install Windows"
+    echo -e "    4. You'll need a Windows ISO or WinBoat will download one for you"
+    echo ""
+    echo -e "  ${YELLOW}Requirements reminder:${NC}"
+    echo -e "    • 32 GB+ free disk space for the Windows VM"
+    echo -e "    • A Windows license key to activate (trial works without one)"
+    echo ""
+    echo -e "  ${CYAN}Docs:${NC} https://winboat.app"
+    echo -e "  ${CYAN}Repo:${NC} https://github.com/TibixDev/winboat"
 }
 
 #===========================================
@@ -5926,50 +5738,41 @@ show_menu() {
     echo "  -- Shell & Terminal --"
     echo "  7)  Install Oh My Posh"
     echo "  8)  Configure Fastfetch"
-    echo "  9)  Install Nerd Fonts"
     echo ""
     echo "  -- Development Tools --"
-    echo "  10) Install Rust"
-    echo "  11) Install NVM (Node Version Manager)"
-    echo "  12) Install & Setup Homebrew (Linuxbrew)"
-    echo "  13) Install Winboat"
+    echo "  9)  Install & Setup Homebrew (Linuxbrew)"
+    echo "  10) Install Winboat"
     echo ""
     echo "  -- Drivers & Apps --"
-    echo "  14) Install NVIDIA Drivers"
-    echo "  15) Install AppImages (Helium, Capacities, Affinity Installer)"
+    echo "  11) Install NVIDIA Drivers"
+    echo "  12) Install AppImages (Helium, Capacities, Affinity Installer)"
     echo ""
     echo "  -- Security --"
-    echo "  16) Install & Configure ClamAV Antivirus"
-    echo "  17) Linux Security Hardening (Chris Titus)"
-    echo "  18) JShielder -- Full System Hardening (KDE Edition)"
+    echo "  13) Install & Configure ClamAV Antivirus"
+    echo "  14) Linux Security Hardening (Chris Titus)"
+    echo "  15) JShielder -- Full System Hardening (KDE Edition)"
     echo ""
     echo "  -- Privacy & Network --"
-    echo "  19) Privacy & Network Tools (Tor, MAC spoof, WireGuard, DNS-DoT)"
+    echo "  16) Privacy & Network Tools (Tor, MAC spoof, WireGuard, DNS-DoT)"
     echo ""
     echo "  -- Storage --"
-    echo "  20) Auto Mount All Drives"
+    echo "  17) Auto Mount All Drives"
     echo ""
     echo "  -- Help & Learning --"
-    echo "  21) NOOBS GUIDE -- Learn Fedora Linux"
-    echo ""
-    echo "  -- Extra Security: !!Use at your own Risk!! --"
-    echo "  22) GRUB Hardening + Kernel Lockdown"
-    echo "  23) Lynis -- Full Security Audit & Score"
-    echo "  24) Disk Encryption Check + Encrypted Swap"
-    echo "  25) Systemd Hardening + Immutable Files + Logwatch"
+    echo "  18) NOOBS GUIDE -- Learn Fedora Linux"
     echo ""
     echo "  -- Privacy Extras --"
-    echo "  26) Harden Browser Privacy (Firefox / LibreWolf / Zen Browser)"
+    echo "  19) Harden Browser Privacy (Firefox / LibreWolf / Zen Browser)"
     echo ""
     echo "  -- Hacking Tools --"
-    echo "  27) Hacking Tools -- Kali Linux Toolkit"
+    echo "  20) Hacking Tools -- Kali Linux Toolkit"
     echo ""
     echo "  -- Hyprland --"
-    echo "  28) Install Hyprland + Dotfiles (JaKooLit / ML4W / end-4)"
+    echo "  21) Install Hyprland + Dotfiles (JaKooLit / ML4W / end-4)"
     echo ""
     echo "  0)  Exit"
     echo ""
-    read -rp "  Select an option [0-28]: " choice
+    read -rp "  Select an option [0-21]: " choice
 }
 
 install_everything() {
@@ -5987,11 +5790,8 @@ install_everything() {
     install_flatpak_packages
     clone_github_repos
     install_github_releases
-    install_nerd_fonts
     install_oh_my_posh
     configure_fastfetch
-    install_rust
-    install_nvm
     install_homebrew
     install_winboat
     install_nvidia_drivers
@@ -6006,15 +5806,10 @@ install_everything() {
     echo -e "  ${YELLOW}Next steps:${NC}"
     echo -e "    1. Restart your terminal"
     echo -e "    2. Set terminal font to a Nerd Font"
-    echo -e "    3. Run 'nvm install --lts' to install Node.js"
-    echo -e "    4. Open menu option 17 for Privacy & Network setup"
-    echo -e "    5. Open menu option 18 to mount all your drives"
-    echo -e "    6. Run option 22 — GRUB Hardening + Kernel Lockdown"
-    echo -e "    7. Run option 23 — Lynis audit to check your hardening score"
-    echo -e "    8. Run option 24 — verify/setup disk encryption"
-    echo -e "    9. Run option 25 — systemd sandboxing + immutable files"
-    echo -e "   10. Run option 26 — harden Firefox/LibreWolf browser"
-    echo -e "   11. New to Linux? Visit menu option 19 — Noobs Guide!"
+    echo -e "    3. Open menu option 16 for Privacy & Network setup"
+    echo -e "    4. Open menu option 17 to mount all your drives"
+    echo -e "    5. Run option 19 — harden Firefox/LibreWolf browser"
+    echo -e "    6. New to Linux? Visit menu option 18 — Noobs Guide!"
     echo ""
     echo -e "  ${CYAN}Enjoy your new Fedora setup!${NC}"
 }
@@ -6052,26 +5847,19 @@ while true; do
         6)  install_github_releases ;;
         7)  install_oh_my_posh ;;
         8)  configure_fastfetch ;;
-        9)  install_nerd_fonts ;;
-        10) install_rust ;;
-        11) install_nvm ;;
-        12) install_homebrew ;;
-        13) install_winboat ;;
-        14) install_nvidia_drivers ;;
-        15) install_appimages ;;
-        16) install_clamav ;;
-        17) install_linux_hardening ;;
-        18) install_jshielder_hardening ;;
-        19) privacy_network_menu ;;
-        20) automount_drives ;;
-        21) noobs_guide_menu ;;
-        22) install_grub_hardening ;;
-        23) run_lynis_audit ;;
-        24) check_and_setup_encryption ;;
-        25) install_systemd_hardening ;;
-        26) harden_browser_privacy ;;
-        27) hacking_tools_menu ;;
-        28) install_hyprland ;;
+        9)  install_homebrew ;;
+        10) install_winboat ;;
+        11) install_nvidia_drivers ;;
+        12) install_appimages ;;
+        13) install_clamav ;;
+        14) install_linux_hardening ;;
+        15) install_jshielder_hardening ;;
+        16) privacy_network_menu ;;
+        17) automount_drives ;;
+        18) noobs_guide_menu ;;
+        19) harden_browser_privacy ;;
+        20) hacking_tools_menu ;;
+        21) install_hyprland ;;
         0)
             echo -e "\n${GREEN}Goodbye! Sweet Heart <3${NC}\n"
             exit 0
