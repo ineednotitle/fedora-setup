@@ -1,11 +1,14 @@
 <div align="center">
+
+ <pre>
 ███████╗███████╗██████╗  ██████╗ ██████╗  █████╗
 ██╔════╝██╔════╝██╔══██╗██╔═══██╗██╔══██╗██╔══██╗
 █████╗  █████╗  ██║  ██║██║   ██║██████╔╝███████║
 ██╔══╝  ██╔══╝  ██║  ██║██║   ██║██╔══██╗██╔══██║
 ██║     ███████╗██████╔╝╚██████╔╝██║  ██║██║  ██║
 ╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝
- 
+</pre>
+
 **A modular, interactive post-install setup script for Fedora Linux.**  
 Packages · Security · Privacy · Dev Tools · Hyprland — all from one terminal menu.
 
