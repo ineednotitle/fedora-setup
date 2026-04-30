@@ -17,8 +17,6 @@ Packages · Security · Privacy · Dev Tools · Hyprland — all from one termin
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 ![Maintained](https://img.shields.io/badge/Maintained-Yes-brightgreen)
 
-<img width="1067" height="906" alt="image" src="https://github.com/user-attachments/assets/e68fc614-2aa1-4251-b421-037b76ebbc7c" />
-
 </div>
 
 ---
@@ -53,53 +51,7 @@ chmod +x setup.sh
 
 ## Menu
 
-```
-  1)  Install EVERYTHING
-
-  -- Package Installation --
-  2)  Setup Repositories (RPM Fusion, Flathub, Terra)
-  3)  Install DNF Packages
-  4)  Install Flatpak Applications
-  5)  Clone & Build GitHub Repos
-  6)  Install GitHub Releases
-
-  -- Shell & Terminal --
-  7)  Install Oh My Posh
-  8)  Configure Fastfetch
-
-  -- Development Tools --
-  9)  Install & Setup Homebrew (Linuxbrew)
-  10) Install Winboat
-
-  -- Drivers & Apps --
-  11) Install NVIDIA Drivers
-  12) Install AppImages (Helium, Capacities, Affinity Installer)
-
-  -- Security --
-  13) Install & Configure ClamAV Antivirus
-  14) Linux Security Hardening (Chris Titus)
-  15) JShielder — Full System Hardening (KDE Edition)
-
-  -- Privacy & Network --
-  16) Privacy & Network Tools (Tor, MAC spoof, WireGuard, DNS-DoT)
-
-  -- Storage --
-  17) Auto Mount All Drives
-
-  -- Help & Learning --
-  18) NOOBS GUIDE — Learn Fedora Linux
-
-  -- Privacy Extras --
-  19) Harden Browser Privacy (Firefox / LibreWolf / Zen Browser)
-
-  -- Hacking Tools --
-  20) Hacking Tools — Kali Linux Toolkit
-
-  -- Hyprland --
-  21) Install Hyprland + Dotfiles (JaKooLit / ML4W / end-4)
-
-  0)  Exit
-```
+<img width="1067" height="906" alt="image" src="https://github.com/user-attachments/assets/e68fc614-2aa1-4251-b421-037b76ebbc7c" />
 
 ---
 
