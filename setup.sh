@@ -105,6 +105,7 @@ DNF_PACKAGES=(
     python3-pip
     nodejs
     npm
+    vscodium
 
     # Utilities
     fastfetch
@@ -151,7 +152,6 @@ FLATPAK_PACKAGES=(
     "org.onlyoffice.desktopeditors"
 
     # Development
-    "com.vscodium.codium"
     "io.podman_desktop.PodmanDesktop"
 
     #Creativity
@@ -414,28 +414,40 @@ install_flatpak_packages() {
     done
 
     if [[ ${#flathub_apps[@]} -gt 0 ]]; then
+        local total_fp=${#flathub_apps[@]} fp_i=0 fp_failed=()
         print_section "Installing ${#flathub_apps[@]} Flatpak app(s) from Flathub..."
-        # Route through spinner — suppresses the noisy runtime/dependency/locale
-        # output (freedesktop platform, GNOME platform, codecs, etc.) to the log.
-        if run_with_spinner "Downloading & installing Flatpak apps..." \
-                flatpak install -y --noninteractive flathub "${flathub_apps[@]}"; then
-            print_success "Flathub apps installed"
-            log "Flatpak batch install succeeded: ${flathub_apps[*]}"
+        for app in "${flathub_apps[@]}"; do
+            (( fp_i++ )) || true
+            local short_name="${app##*.}"   # e.g. "Discord" from "com.discordapp.Discord"
+            if run_with_spinner "[${fp_i}/${total_fp}] ${short_name}..." \
+                    flatpak install -y --noninteractive flathub "$app"; then
+                print_success "[${fp_i}/${total_fp}] ${app}"
+                log "Flatpak installed: ${app}"
+            else
+                print_error "[${fp_i}/${total_fp}] Failed: ${app}"
+                fp_failed+=("$app")
+                log "Flatpak FAILED: ${app}"
+            fi
+        done
+        if [[ ${#fp_failed[@]} -eq 0 ]]; then
+            print_success "All Flatpak apps installed successfully"
         else
-            print_error "Some Flathub apps failed — check $LOG_FILE"
-            log "Flatpak batch install had failures: ${flathub_apps[*]}"
+            print_warning "Failed apps (${#fp_failed[@]}): ${fp_failed[*]}"
+            print_warning "Check $LOG_FILE for details"
         fi
     fi
 
     if $zen_pending; then
-        print_section "Installing Zen Browser (separate remote)..."
+        local zen_total=${#flathub_apps[@]}
+        (( zen_total++ )) || true
+        print_section "Installing Zen Browser..."
         flatpak remote-add --if-not-exists zen-browser \
             https://download.opensuse.org/repositories/home:/bgstack15:/aftermoz/AppStream/home:bgstack15:aftermoz.flatpakrepo \
             2>/dev/null || true
-        if run_with_spinner "Installing Zen Browser..." \
+        if run_with_spinner "[Zen] Installing Zen Browser..." \
                 flatpak install -y --noninteractive flathub app.zen_browser.zen 2>/dev/null; then
             print_success "Zen Browser installed from Flathub"
-        elif run_with_spinner "Installing Zen Browser (alt remote)..." \
+        elif run_with_spinner "[Zen] Installing Zen Browser (alt remote)..." \
                 flatpak install -y --noninteractive zen-browser app.zen_browser.zen 2>/dev/null; then
             print_success "Zen Browser installed"
         else
@@ -451,23 +463,24 @@ clone_github_repos() {
     pushd "$GITHUB_DIR" > /dev/null
 
     local repo_entry repo_url branch install_type install_cmd repo_name
+    local gr_total=${#GITHUB_REPOS[@]} gr_i=0
     for repo_entry in "${GITHUB_REPOS[@]}"; do
+        (( gr_i++ )) || true
         IFS='|' read -r repo_url branch install_type install_cmd <<< "$repo_entry"
         repo_name=$(basename "$repo_url" .git)
 
-        print_section "Processing: $repo_name"
+        printf "\n  [%d/%d] %s\n" "$gr_i" "$gr_total" "$repo_name"
 
         if [[ -d "$repo_name" ]]; then
-            print_warning "Directory exists, pulling latest..."
-            cd "$repo_name"
-            git pull origin "$branch" &>> "$LOG_FILE"
-            cd ..
+            run_with_spinner "[${gr_i}/${gr_total}] Pulling latest: ${repo_name}..." \
+                git -C "$repo_name" pull origin "$branch"
+            print_success "[${gr_i}/${gr_total}] Updated: $repo_name"
         else
-            echo "  Cloning $repo_url..."
-            if git clone --branch "$branch" "$repo_url" &>> "$LOG_FILE"; then
-                print_success "Cloned successfully"
+            if run_with_spinner "[${gr_i}/${gr_total}] Cloning: ${repo_name}..." \
+                    git clone --branch "$branch" "$repo_url" "$repo_name"; then
+                print_success "[${gr_i}/${gr_total}] Cloned: $repo_name"
             else
-                print_error "Clone failed"
+                print_error "[${gr_i}/${gr_total}] Clone failed: $repo_name"
                 log "Git clone failed: $repo_url"
                 continue
             fi
@@ -480,57 +493,57 @@ clone_github_repos() {
                 print_success "Clone only — no build needed"
                 ;;
             make)
-                echo "  Running make..."
-                if eval "$install_cmd" &>> "$LOG_FILE"; then
-                    print_success "Build completed"
+                if run_with_spinner "[${gr_i}/${gr_total}] Building (make): ${repo_name}..." \
+                        bash -c "$install_cmd"; then
+                    print_success "Build completed: $repo_name"
                 else
-                    print_error "Build failed"
+                    print_error "Build failed: $repo_name"
                 fi
                 ;;
             cmake)
-                echo "  Running cmake build..."
                 mkdir -p build && cd build
-                if { cmake .. && make && sudo make install; } &>> "$LOG_FILE"; then
-                    print_success "Build completed"
+                if run_with_spinner "[${gr_i}/${gr_total}] Building (cmake): ${repo_name}..." \
+                        bash -c "cmake .. && make && sudo make install"; then
+                    print_success "Build completed: $repo_name"
                 else
-                    print_error "Build failed"
+                    print_error "Build failed: $repo_name"
                 fi
                 cd ..
                 ;;
             script)
-                echo "  Running install script..."
                 if [[ -f "$install_cmd" ]]; then
                     chmod +x "$install_cmd"
-                    if ./"$install_cmd" &>> "$LOG_FILE"; then
-                        print_success "Script completed"
+                    if run_with_spinner "[${gr_i}/${gr_total}] Running script: ${repo_name}..." \
+                            ./"$install_cmd"; then
+                        print_success "Script completed: $repo_name"
                     else
-                        print_error "Script failed"
+                        print_error "Script failed: $repo_name"
                     fi
                 fi
                 ;;
             cargo)
-                echo "  Building with Cargo..."
-                if eval "$install_cmd" &>> "$LOG_FILE"; then
+                if run_with_spinner "[${gr_i}/${gr_total}] Building (cargo): ${repo_name}..." \
+                        bash -c "$install_cmd"; then
                     cp target/release/* "$LOCAL_BIN/" 2>/dev/null || true
-                    print_success "Build completed"
+                    print_success "Build completed: $repo_name"
                 else
-                    print_error "Build failed"
+                    print_error "Build failed: $repo_name"
                 fi
                 ;;
             go)
-                echo "  Building with Go..."
-                if go build -o "$LOCAL_BIN/$repo_name" &>> "$LOG_FILE"; then
-                    print_success "Build completed"
+                if run_with_spinner "[${gr_i}/${gr_total}] Building (go): ${repo_name}..." \
+                        go build -o "$LOCAL_BIN/$repo_name"; then
+                    print_success "Build completed: $repo_name"
                 else
-                    print_error "Build failed"
+                    print_error "Build failed: $repo_name"
                 fi
                 ;;
             npm)
-                echo "  Installing with npm..."
-                if { npm install && npm run build --if-present; } &>> "$LOG_FILE"; then
-                    print_success "Build completed"
+                if run_with_spinner "[${gr_i}/${gr_total}] Installing (npm): ${repo_name}..." \
+                        bash -c "npm install && npm run build --if-present"; then
+                    print_success "Build completed: $repo_name"
                 else
-                    print_error "Build failed"
+                    print_error "Build failed: $repo_name"
                 fi
                 ;;
         esac
@@ -563,8 +576,8 @@ install_github_releases() {
         IFS='|' read -r repo binary_name asset_pattern <<< "$entry"
 
         if check_command "$binary_name"; then
-            echo -e "  ${YELLOW}already installed:${NC} $binary_name"
-            return
+            log "Already installed: $binary_name"
+            return 0
         fi
 
         local api_url="https://api.github.com/repos/$repo/releases/latest"
@@ -574,7 +587,7 @@ install_github_releases() {
             | head -1) || true
 
         if [[ -z "$download_url" || "$download_url" == "null" ]]; then
-            echo -e "  ${RED}✗ Asset not found: $binary_name${NC}"
+            log "Asset not found: $binary_name" ; return 1
             log "Asset not found: $binary_name"
             return
         fi
@@ -584,11 +597,9 @@ install_github_releases() {
         dl_dir="$tdir/$binary_name"
         mkdir -p "$dl_dir"
 
-        echo "  Downloading $binary_name..."
-        if ! curl -L --progress-bar "$download_url" -o "$dl_dir/$filename"; then
-            echo -e "  ${RED}✗ Download failed: $binary_name${NC}"
+        if ! curl -sL "$download_url" -o "$dl_dir/$filename"; then
             log "Download failed: $binary_name"
-            return
+            return 1
         fi
 
         cd "$dl_dir"
@@ -598,7 +609,7 @@ install_github_releases() {
             *)
                 chmod +x "$filename"
                 cp "$filename" "$LOCAL_BIN/$binary_name"
-                echo -e "  ${GREEN}✓ Installed $binary_name${NC}"
+                log "Installed $binary_name"
                 return
                 ;;
         esac
@@ -611,27 +622,30 @@ install_github_releases() {
         if [[ -n "$binary_path" ]]; then
             chmod +x "$binary_path"
             cp "$binary_path" "$LOCAL_BIN/$binary_name"
-            echo -e "  ${GREEN}✓ Installed $binary_name to $LOCAL_BIN${NC}"
+            log "Installed $binary_name to $LOCAL_BIN"
         else
-            echo -e "  ${RED}✗ Binary not found in archive: $binary_name${NC}"
+            log "Binary not found in archive: $binary_name" ; return 1
             log "Binary not found: $binary_name"
         fi
     }
 
-    local pids=() entry
+    # Sequential with per-item spinner so output stays clean
+    local gr_total=${#GITHUB_RELEASES[@]} gr_i=0 failed=0 entry
     for entry in "${GITHUB_RELEASES[@]}"; do
-        _fetch_and_install_one "$entry" "$temp_dir" &
-        pids+=($!)
-    done
-
-    local failed=0 pid
-    for pid in "${pids[@]}"; do
-        wait "$pid" || { failed=$(( failed + 1 )); } || true
+        (( gr_i++ )) || true
+        local _bin_name
+        _bin_name=$(echo "$entry" | cut -d'|' -f2)
+        if run_with_spinner "[${gr_i}/${gr_total}] ${_bin_name}..." \
+                bash -c "_fetch_and_install_one $(printf %q "$entry") $(printf %q "$temp_dir")"; then
+            print_success "[${gr_i}/${gr_total}] $_bin_name installed"
+        else
+            print_error "[${gr_i}/${gr_total}] $_bin_name failed — check $LOG_FILE"
+            (( failed++ )) || true
+        fi
     done
 
     [[ $failed -gt 0 ]] && print_warning "$failed download(s) had issues — check $LOG_FILE"
     print_success "GitHub Releases done"
-    # Cleanup temp dir only after all background jobs have finished
     rm -rf "$temp_dir"
 }
 
@@ -654,9 +668,9 @@ install_oh_my_posh() {
 
     mkdir -p "$HOME/.config/oh-my-posh/themes"
 
-    print_section "Downloading themes..."
-    wget -q --show-progress https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/themes.zip \
-        -O /tmp/themes.zip
+    run_with_spinner "Downloading Oh My Posh themes..." \
+        curl -sL https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/themes.zip \
+        -o /tmp/themes.zip
     unzip -o -q /tmp/themes.zip -d "$HOME/.config/oh-my-posh/themes"
     rm /tmp/themes.zip
     chmod u+rw "$HOME/.config/oh-my-posh/themes"/*.json 2>/dev/null || true
@@ -889,16 +903,10 @@ install_appimages() {
         2) _download_capacities ;;
         3) _download_affinity_installer ;;
         4)
-            # All three downloads in parallel
-            _download_helium &
-            local pid1=$!
-            _download_capacities &
-            local pid2=$!
-            _download_affinity_installer &
-            local pid3=$!
-            wait "$pid1" || true
-            wait "$pid2" || true
-            wait "$pid3" || true
+            # Sequential so spinners render cleanly (parallel would interleave output)
+            _download_helium
+            _download_capacities
+            _download_affinity_installer
             ;;
         0)
             print_warning "Cancelled"
@@ -942,8 +950,7 @@ _download_helium() {
         return
     fi
 
-    echo "  Downloading: $filename"
-    if curl -L --progress-bar "$download_url" -o "$dest"; then
+    if run_with_spinner "Downloading Helium Browser..." curl -sL "$download_url" -o "$dest"; then
         chmod +x "$dest"
         print_success "Helium Browser saved to $dest"
     else
@@ -977,8 +984,7 @@ _download_capacities() {
         return
     fi
 
-    echo "  Downloading: $filename"
-    if curl -L --progress-bar "$download_url" -o "$dest"; then
+    if run_with_spinner "Downloading Capacities..." curl -sL "$download_url" -o "$dest"; then
         chmod +x "$dest"
         print_success "Capacities saved to $dest"
     else
@@ -1000,8 +1006,7 @@ _download_affinity_installer() {
         return
     fi
 
-    echo "  Downloading: $filename"
-    if curl -L --progress-bar "$download_url" -o "$dest"; then
+    if run_with_spinner "Downloading Linux Affinity Installer..." curl -sL "$download_url" -o "$dest"; then
         chmod +x "$dest"
         print_success "Linux Affinity Installer saved to $dest"
         echo -e "  ${CYAN}Run it with: ${WHITE}$dest${NC}"
@@ -1018,7 +1023,7 @@ _download_affinity_installer() {
         if [[ -n "$resolved_url" ]]; then
             filename=$(basename "$resolved_url")
             dest="$APPIMAGE_DIR/$filename"
-            if curl -L --progress-bar "$resolved_url" -o "$dest"; then
+            if run_with_spinner "Downloading Linux Affinity Installer (fallback)..." curl -sL "$resolved_url" -o "$dest"; then
                 chmod +x "$dest"
                 print_success "Linux Affinity Installer saved to $dest"
             else
@@ -1297,7 +1302,7 @@ install_linux_hardening() {
         print_success "firewalld enabled — SSH rate-limited, HTTP/HTTPS open, all else blocked"
 
         echo ""
-        echo "  Installing fail2ban..."
+        # Installing fail2ban via run_with_spinner below
         if ! rpm -q fail2ban &>/dev/null; then
             sudo dnf install -y fail2ban fail2ban-firewalld 2>&1 | tee -a "$LOG_FILE" || true
             local _f2b_rc=${PIPESTATUS[0]}
@@ -5558,16 +5563,14 @@ install_winboat() {
 
     local rpm_file="/tmp/winboat-latest.rpm"
     print_section "Downloading WinBoat RPM: $(basename "$rpm_url")..."
-    if ! curl -L --progress-bar "$rpm_url" -o "$rpm_file" 2>&1 | tee -a "$LOG_FILE"; then
+    if ! run_with_spinner "Downloading WinBoat RPM..." curl -sL "$rpm_url" -o "$rpm_file"; then
         print_error "Download failed — check your connection."
         return 1
     fi
     print_success "Downloaded to $rpm_file"
 
     # ── 5. Install the RPM ─────────────────────────────────────────────
-    print_section "Installing WinBoat RPM..."
-    # --allowerasing handles .build-id file conflicts with other Electron apps (e.g. Lens)
-    if sudo dnf install -y --allowerasing "$rpm_file" 2>&1 | tee -a "$LOG_FILE"; then
+    if run_with_spinner "Installing WinBoat RPM..." sudo dnf install -y --allowerasing "$rpm_file"; then
         print_success "WinBoat installed successfully!"
         log "WinBoat installed from $rpm_url"
     else
@@ -5778,7 +5781,7 @@ show_menu() {
     echo "██╔══╝  ██╔══╝  ██║  ██║██║   ██║██╔══██╗██╔══██║"
     echo "██║     ███████╗██████╔╝╚██████╔╝██║  ██║██║  ██║"
     echo "╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝"
-    echo "             Created by:ineednotitle            "
+    echo "           Created by:ineednotitle               "
     echo "================================================="
     echo ""
     echo "  1)  Install EVERYTHING"
@@ -5796,7 +5799,7 @@ show_menu() {
     echo ""
     echo "  -- Development Tools --"
     echo "  9)  Install & Setup Homebrew (Linuxbrew)"
-    echo "  10) Install Winboat"
+    echo "  10) Install Winboat --- Running windows natively currently in beta"
     echo ""
     echo "  -- Drivers & Apps --"
     echo "  11) Install NVIDIA Drivers"
