@@ -9,7 +9,7 @@
 #  ╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝      ╚═════╝ ╚═╝  ╚═╝
 #
 #      Invisible Migration from Windows + Full Setup + Easy of Comfort
-#   Version: 1.0.v
+#   Version: 1.1.v
 #   Modules: Winboat · Browsers Harding · Security · VPN · Privacy · More
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
@@ -39,8 +39,10 @@ run_with_spinner() {
     local spin_chars='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     local i=0
 
-    # Run the command in background, capture its PID
-    "$@" >> "$LOG_FILE" 2>&1 &
+    # Run the command in background, capture its PID.
+    # PYTHONUNBUFFERED=1 prevents Python-based tools (pip, dnf on Fedora 41+)
+    # from blocking on line-buffering when stdout is not a TTY.
+    PYTHONUNBUFFERED=1 "$@" >> "$LOG_FILE" 2>&1 &
     local cmd_pid=$!
 
     tput civis 2>/dev/null || true   # hide cursor
@@ -135,7 +137,6 @@ DNF_PACKAGES=(
     # Fonts
     fira-code-fonts
     jetbrains-mono-fonts
-    jebrains-fonts
 )
 
 # Flatpak Applications
@@ -289,15 +290,16 @@ setup_repositories() {
     if dnf repolist | grep -q "terra"; then
         print_warning "Terra repo already configured"
     else
+        local fed_ver
+        fed_ver=$(rpm -E %fedora)
         run_with_spinner "Adding Terra repository..." \
-            bash -c 'sudo dnf install -y "https://github.com/terrapkg/subatomic-repos/raw/main/terra.repo" 2>/dev/null || \
-            sudo dnf config-manager --add-repo "https://terra.fyralabs.com/terra.repo" 2>/dev/null || true'
-        # Fallback: write the repo file directly
+            sudo dnf config-manager --add-repo "https://repos.fyralabs.com/terra${fed_ver}/terra.repo"
+        # Fallback: write the repo file directly if config-manager failed
         if ! dnf repolist 2>/dev/null | grep -q "terra"; then
-            sudo tee /etc/yum.repos.d/terra.repo > /dev/null << 'TERRA_REPO'
+            sudo tee /etc/yum.repos.d/terra.repo > /dev/null << TERRA_REPO
 [terra]
-name=Terra - $basearch
-baseurl=https://repos.fyralabs.com/terra$releasever/$basearch/
+name=Terra - \$basearch
+baseurl=https://repos.fyralabs.com/terra${fed_ver}/\$basearch/
 type=rpm
 skip_if_unavailable=True
 gpgcheck=1
@@ -322,17 +324,28 @@ install_dnf_packages() {
     # package metadata N times.  Now: one metadata load, one transaction.
     # Typical speedup: ~5 min → ~30 sec for this package list.
     print_section "Checking installed packages"
-    local to_install=() pkg total_pkgs i=0
+    # One rpm -qa upfront instead of one rpm -q per package.
+    # 29 individual rpm -q calls add ~1.5 s of overhead and make the bar
+    # look frozen. A single rpm -qa piped to grep -qx is near-instant.
+    local installed_rpms to_install=() already=() missing=() pkg total_pkgs i=0
+    installed_rpms=$(rpm -qa --qf '%{NAME}\n')
     total_pkgs=${#DNF_PACKAGES[@]}
+
     for pkg in "${DNF_PACKAGES[@]}"; do
         (( i++ )) || true
-        print_progress_bar "$i" "$total_pkgs" "$pkg"
-        if rpm -q "$pkg" &>/dev/null; then
-            echo -e "  ${YELLOW}already installed:${NC} $pkg"
+        printf "  [checking] %d/%d  %-30s\n" "$i" "$total_pkgs" "$pkg"
+        if echo "$installed_rpms" | grep -qx "$pkg"; then
+            already+=("$pkg")
         else
+            missing+=("$pkg")
             to_install+=("$pkg")
         fi
     done
+
+    echo ""
+    [[ ${#already[@]} -gt 0 ]] && echo -e "  ${YELLOW}Already installed (${#already[@]}):${NC} ${already[*]}"
+    [[ ${#missing[@]} -gt 0 ]] && echo -e "  ${CYAN}To install (${#missing[@]}):${NC} ${missing[*]}"
+    echo ""
 
     if [[ ${#to_install[@]} -eq 0 ]]; then
         print_success "All packages already installed"
@@ -340,7 +353,8 @@ install_dnf_packages() {
     fi
 
     print_section "Installing ${#to_install[@]} package(s) in one transaction..."
-    run_with_spinner "Installing DNF packages..." sudo dnf install -y "${to_install[@]}"
+    run_with_spinner "Installing DNF packages..." \
+        sudo dnf install -y --setopt=install_weak_deps=False --setopt=tsflags=nodocs "${to_install[@]}"
     local _dnf_rc=$?
     if [[ $_dnf_rc -eq 0 ]]; then
         print_success "All packages installed"
@@ -359,17 +373,23 @@ install_flatpak_packages() {
     local installed_list
     installed_list=$(flatpak list --app --columns=application 2>/dev/null)
 
-    local to_install=() app total_apps i=0
+    local to_install=() already=() missing=() app total_apps i=0
     total_apps=${#FLATPAK_PACKAGES[@]}
     for app in "${FLATPAK_PACKAGES[@]}"; do
         (( i++ )) || true
-        print_progress_bar "$i" "$total_apps" "$(basename "$app")"
+        printf "  [checking] %d/%d  %-40s\n" "$i" "$total_apps" "$app"
         if echo "$installed_list" | grep -qF "$app"; then
-            echo -e "  ${YELLOW}already installed:${NC} $app"
+            already+=("$app")
         else
+            missing+=("$app")
             to_install+=("$app")
         fi
     done
+
+    echo ""
+    [[ ${#already[@]} -gt 0 ]] && echo -e "  ${YELLOW}Already installed (${#already[@]}):${NC} ${already[*]}"
+    [[ ${#missing[@]} -gt 0 ]] && echo -e "  ${CYAN}To install (${#missing[@]}):${NC} ${missing[*]}"
+    echo ""
 
     if [[ ${#to_install[@]} -eq 0 ]]; then
         print_success "All Flatpak apps already installed"
@@ -381,13 +401,47 @@ install_flatpak_packages() {
     # is a TTY and only shows the live progress bar / spinner when it is.
     # Piping to tee converts stdout to a pipe (non-TTY), which suppresses the
     # interactive progress display entirely.  Log the result separately instead.
-    print_section "Installing ${#to_install[@]} Flatpak app(s) in one transaction..."
-    if flatpak install -y flathub "${to_install[@]}"; then
-        print_success "All Flatpak apps installed"
-        log "Flatpak batch install succeeded: ${to_install[*]}"
-    else
-        print_error "Some Flatpak apps failed — check $LOG_FILE"
-        log "Flatpak batch install had failures: ${to_install[*]}"
+    #
+    # NOTE: app.zen_browser.zen is NOT on Flathub — it lives on its own remote.
+    # We split it out to avoid poisoning the whole batch transaction.
+    local flathub_apps=() zen_pending=false
+    for app in "${to_install[@]}"; do
+        if [[ "$app" == "app.zen_browser.zen" ]]; then
+            zen_pending=true
+        else
+            flathub_apps+=("$app")
+        fi
+    done
+
+    if [[ ${#flathub_apps[@]} -gt 0 ]]; then
+        print_section "Installing ${#flathub_apps[@]} Flatpak app(s) from Flathub..."
+        # Route through spinner — suppresses the noisy runtime/dependency/locale
+        # output (freedesktop platform, GNOME platform, codecs, etc.) to the log.
+        if run_with_spinner "Downloading & installing Flatpak apps..." \
+                flatpak install -y --noninteractive flathub "${flathub_apps[@]}"; then
+            print_success "Flathub apps installed"
+            log "Flatpak batch install succeeded: ${flathub_apps[*]}"
+        else
+            print_error "Some Flathub apps failed — check $LOG_FILE"
+            log "Flatpak batch install had failures: ${flathub_apps[*]}"
+        fi
+    fi
+
+    if $zen_pending; then
+        print_section "Installing Zen Browser (separate remote)..."
+        flatpak remote-add --if-not-exists zen-browser \
+            https://download.opensuse.org/repositories/home:/bgstack15:/aftermoz/AppStream/home:bgstack15:aftermoz.flatpakrepo \
+            2>/dev/null || true
+        if run_with_spinner "Installing Zen Browser..." \
+                flatpak install -y --noninteractive flathub app.zen_browser.zen 2>/dev/null; then
+            print_success "Zen Browser installed from Flathub"
+        elif run_with_spinner "Installing Zen Browser (alt remote)..." \
+                flatpak install -y --noninteractive zen-browser app.zen_browser.zen 2>/dev/null; then
+            print_success "Zen Browser installed"
+        else
+            print_warning "Zen Browser could not be installed automatically — install manually from https://flathub.org/apps/app.zen_browser.zen"
+            log "Zen Browser install failed — manual install required"
+        fi
     fi
 }
 
@@ -5724,6 +5778,7 @@ show_menu() {
     echo "██╔══╝  ██╔══╝  ██║  ██║██║   ██║██╔══██╗██╔══██║"
     echo "██║     ███████╗██████╔╝╚██████╔╝██║  ██║██║  ██║"
     echo "╚═╝     ╚══════╝╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝"
+    echo "             Created by:ineednotitle            "
     echo "================================================="
     echo ""
     echo "  1)  Install EVERYTHING"
