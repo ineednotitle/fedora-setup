@@ -271,15 +271,20 @@ GITHUB_RELEASES=(
 
 ---
 
-## Logging
-
-Every run writes a timestamped log to `~/setup_log_<YYYYMMDD_HHMMSS>.txt`. Check it if anything fails — all command output is captured there.
+⭐ Star History
+<a href="https://star-history.com/#ineednotitle/fedora-setup&Date">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=ineednotitle/fedora-setup&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=ineednotitle/fedora-setup&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=ineednotitle/fedora-setup&type=Date" />
+ </picture>
+</a>
 
 ---
 
 ## ⚠️ Disclaimer
 
-This script makes significant changes to your system configuration. It is provided as-is for personal use. **Always create a [Timeshift](https://github.com/teejee2008/timeshift) snapshot before running hardening or system-level options.** The author takes no responsibility for data loss or system instability.
+This script makes significant changes to your system configuration. It is provided as-is for personal use. **Always create a [Timeshift](https://github.com/teejee2008/timeshift) snapshot before running hardening or system-level options.** The author takes no responsibility for data loss or system instability. 
 
 ---
 
